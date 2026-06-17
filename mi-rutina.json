@@ -1,0 +1,73 @@
+{
+  "routines": [
+    {
+      "name": "Rutina Definitiva (A/B/C)",
+      "days": [
+        {
+          "name": "A · Horizontal + Cuádriceps",
+          "exercises": [
+            { "name": "Sentadilla", "muscle": "Cuádriceps", "sets": 3, "reps": "8-10", "weight": 60, "note": "Libre. Control, sin forzar", "rest": 120, "restAfter": 90, "perSide": false },
+            { "name": "Press banca", "muscle": "Pecho", "sets": 3, "reps": "8", "weight": 75, "note": "Busca 75 kg", "rest": 120, "restAfter": 90, "perSide": false },
+            { "name": "Remo con barra", "muscle": "Espalda", "sets": 3, "reps": "8-10", "weight": 70, "note": "", "rest": 90, "restAfter": 60, "perSide": false },
+            { "name": "Elevaciones laterales", "muscle": "Hombro", "sets": 2, "reps": "12-15", "weight": 8, "note": "8-9 kg, control", "rest": 60, "restAfter": 45, "perSide": false },
+            { "name": "Curl mancuernas", "muscle": "Bíceps", "sets": 2, "reps": "10-12", "weight": 14, "note": "Solo 2 series, ya eres fuerte aquí", "rest": 60, "restAfter": 45, "perSide": true },
+            { "name": "Plancha", "muscle": "Abdomen", "sets": 3, "reps": "30s o 10", "weight": 0, "note": "Plancha o rueda", "rest": 60, "restAfter": 45, "perSide": false },
+            { "name": "Cardio", "muscle": "Cardio", "sets": 1, "reps": "10'", "weight": 0, "note": "Opcional", "rest": null, "restAfter": null, "perSide": false }
+          ]
+        },
+        {
+          "name": "B · Vertical + Cadena posterior",
+          "exercises": [
+            { "name": "Peso muerto rumano", "muscle": "Femoral", "sets": 3, "reps": "5-6", "weight": 140, "note": "Desde arriba, baja controlada", "rest": 120, "restAfter": 90, "perSide": false },
+            { "name": "Press militar", "muscle": "Hombro", "sets": 3, "reps": "8-10", "weight": 24, "note": "", "rest": 120, "restAfter": 90, "perSide": true },
+            { "name": "Dominadas", "muscle": "Espalda", "sets": 3, "reps": "6-8", "weight": 0, "note": "Libres. Mantén 8, 7, 6", "rest": 120, "restAfter": 90, "perSide": false },
+            { "name": "Zancadas", "muscle": "Cuádriceps", "sets": 3, "reps": "10/pierna", "weight": 24, "note": "", "rest": 90, "restAfter": 60, "perSide": true },
+            { "name": "Extensión en polea", "muscle": "Tríceps", "sets": 2, "reps": "10-12", "weight": 27, "note": "Tríceps polea", "rest": 60, "restAfter": 45, "perSide": false },
+            { "name": "Elevación de piernas", "muscle": "Abdomen", "sets": 3, "reps": "10-15", "weight": 0, "note": "Colgado", "rest": 60, "restAfter": 45, "perSide": false },
+            { "name": "Cardio", "muscle": "Cardio", "sets": 1, "reps": "10'", "weight": 0, "note": "Opcional", "rest": null, "restAfter": null, "perSide": false }
+          ]
+        },
+        {
+          "name": "C · Hipertrofia + Unilateral + Hombro",
+          "exercises": [
+            { "name": "Hip thrust", "muscle": "Glúteo", "sets": 2, "reps": "10-12", "weight": 0, "note": "Máquina. RPE 9, al borde del fallo (2 series intensas)", "rest": 90, "restAfter": 60, "perSide": false },
+            { "name": "Sentadilla búlgara", "muscle": "Cuádriceps", "sets": 3, "reps": "10/pierna", "weight": 16, "note": "Sube a 20 kg", "rest": 90, "restAfter": 60, "perSide": true },
+            { "name": "Press inclinado mancuernas", "muscle": "Pecho", "sets": 3, "reps": "8-10", "weight": 24, "note": "Sube hacia 26 kg", "rest": 90, "restAfter": 60, "perSide": true },
+            { "name": "Remo en polea", "muscle": "Espalda", "sets": 3, "reps": "10-12", "weight": 0, "note": "Polea baja", "rest": 90, "restAfter": 60, "perSide": false },
+            { "name": "Elevaciones laterales", "muscle": "Hombro", "sets": 2, "reps": "12-15", "weight": 8, "note": "2ª vez en la semana", "rest": 60, "restAfter": 45, "perSide": false },
+            { "name": "Cardio", "muscle": "Cardio", "sets": 1, "reps": "10'", "weight": 0, "note": "Opcional", "rest": null, "restAfter": null, "perSide": false }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Compacta 2 días",
+      "days": [
+        {
+          "name": "Día 1",
+          "exercises": [
+            { "name": "Sentadilla", "muscle": "Cuádriceps", "sets": 3, "reps": "8-10", "weight": 60, "note": "Libre. Control, sin forzar", "rest": 120, "restAfter": 90, "perSide": false },
+            { "name": "Press banca", "muscle": "Pecho", "sets": 3, "reps": "8", "weight": 75, "note": "Busca 75 kg", "rest": 120, "restAfter": 90, "perSide": false },
+            { "name": "Remo con barra", "muscle": "Espalda", "sets": 3, "reps": "8-10", "weight": 70, "note": "", "rest": 90, "restAfter": 60, "perSide": false },
+            { "name": "Elevaciones laterales", "muscle": "Hombro", "sets": 2, "reps": "12-15", "weight": 8, "note": "8-9 kg, control", "rest": 60, "restAfter": 45, "perSide": false },
+            { "name": "Curl mancuernas", "muscle": "Bíceps", "sets": 2, "reps": "10-12", "weight": 14, "note": "", "rest": 60, "restAfter": 45, "perSide": true },
+            { "name": "Plancha", "muscle": "Abdomen", "sets": 2, "reps": "30s o 10", "weight": 0, "note": "Core, 2-3 series", "rest": 60, "restAfter": 45, "perSide": false },
+            { "name": "Cardio", "muscle": "Cardio", "sets": 1, "reps": "10'", "weight": 0, "note": "Opcional", "rest": null, "restAfter": null, "perSide": false }
+          ]
+        },
+        {
+          "name": "Día 2",
+          "exercises": [
+            { "name": "Peso muerto rumano", "muscle": "Femoral", "sets": 3, "reps": "5-6", "weight": 140, "note": "Desde arriba, baja controlada", "rest": 120, "restAfter": 90, "perSide": false },
+            { "name": "Press militar", "muscle": "Hombro", "sets": 3, "reps": "8-10", "weight": 24, "note": "", "rest": 120, "restAfter": 90, "perSide": true },
+            { "name": "Dominadas", "muscle": "Espalda", "sets": 3, "reps": "6-8", "weight": 0, "note": "Libres. Mantén 8, 7, 6", "rest": 120, "restAfter": 90, "perSide": false },
+            { "name": "Zancadas", "muscle": "Cuádriceps", "sets": 3, "reps": "10/pierna", "weight": 24, "note": "", "rest": 90, "restAfter": 60, "perSide": true },
+            { "name": "Extensión en polea", "muscle": "Tríceps", "sets": 2, "reps": "10-12", "weight": 27, "note": "Tríceps polea", "rest": 60, "restAfter": 45, "perSide": false },
+            { "name": "Elevación de piernas", "muscle": "Abdomen", "sets": 3, "reps": "10-15", "weight": 0, "note": "Core, colgado", "rest": 60, "restAfter": 45, "perSide": false },
+            { "name": "Cardio", "muscle": "Cardio", "sets": 1, "reps": "10'", "weight": 0, "note": "Opcional", "rest": null, "restAfter": null, "perSide": false }
+          ]
+        }
+      ]
+    }
+  ]
+}

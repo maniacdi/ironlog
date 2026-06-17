@@ -1,0 +1,19 @@
+{
+  "expo": {
+    "name": "IronLog",
+    "slug": "ironlog",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "dark",
+    "backgroundColor": "#0E0F12",
+    "assetBundlePatterns": ["**/*"],
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.ironlog.app"
+    },
+    "android": {
+      "package": "com.ironlog.app"
+    },
+    "web": {}
+  }
+}
