@@ -6,20 +6,30 @@
     "orientation": "portrait",
     "userInterfaceStyle": "dark",
     "backgroundColor": "#0E0F12",
-    "assetBundlePatterns": [
-      "**/*"
-    ],
+    "icon": "./assets/icon.png",
+    "assetBundlePatterns": ["**/*"],
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.ironlog.app"
     },
     "android": {
-      "package": "com.ironlog.app"
+      "package": "com.ironlog.app",
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#0E0F12"
+      }
     },
     "web": {},
     "plugins": [
-      "expo-sharing",
-      "expo-font"
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/splash.png",
+          "imageWidth": 200,
+          "resizeMode": "contain",
+          "backgroundColor": "#0E0F12"
+        }
+      ]
     ]
   }
 }
