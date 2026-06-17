@@ -6,7 +6,9 @@
     "orientation": "portrait",
     "userInterfaceStyle": "dark",
     "backgroundColor": "#0E0F12",
-    "assetBundlePatterns": ["**/*"],
+    "assetBundlePatterns": [
+      "**/*"
+    ],
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.ironlog.app"
@@ -14,6 +16,9 @@
     "android": {
       "package": "com.ironlog.app"
     },
-    "web": {}
+    "web": {},
+    "plugins": [
+      "expo-sharing"
+    ]
   }
 }
