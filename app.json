@@ -18,7 +18,8 @@
     },
     "web": {},
     "plugins": [
-      "expo-sharing"
+      "expo-sharing",
+      "expo-font"
     ]
   }
 }
