@@ -5,7 +5,17 @@ import * as FileSystem from 'expo-file-system/legacy';
 import * as Sharing from 'expo-sharing';
 import { Icon } from '../components/Icon';
 import { C, S } from '../theme';
-import { uid, norm, mmss, exName, exMuscle, parseCSV, toCSV } from '../helpers';
+import {
+  uid,
+  norm,
+  mmss,
+  exName,
+  exMuscle,
+  parseCSV,
+  toCSV,
+  sessionToMarkdown,
+  sessionsToJSON,
+} from '../helpers';
 import { seed } from '../dataModel';
 
 export default function DataScreen({ data, setData }) {
@@ -45,6 +55,7 @@ export default function DataScreen({ data, setData }) {
     };
     writeAndShare('rutinas.json', JSON.stringify(out, null, 2));
   };
+
   const exportCSV = () => {
     const rows = [];
     data.routines.forEach((r) =>
@@ -68,6 +79,7 @@ export default function DataScreen({ data, setData }) {
     );
     writeAndShare('rutinas.csv', toCSV(rows));
   };
+
   const exportLogs = () => {
     const rows = [];
     data.logs.forEach((l) =>
@@ -77,9 +89,12 @@ export default function DataScreen({ data, setData }) {
             fecha: l.date,
             dia: l.dayName,
             ejercicio: exName(data, e.exerciseId),
+            saltado_ejercicio: e.skipped ? 'si' : '',
             serie: i + 1,
             reps: s.reps,
             peso: s.weight,
+            completada: s.done ? 'si' : '',
+            saltada: s.skipped ? 'si' : '',
             sensacion_dia: l.feeling || '',
             duracion_min: l.durationMin ?? '',
           }),
@@ -89,6 +104,33 @@ export default function DataScreen({ data, setData }) {
     writeAndShare('historial.csv', toCSV(rows));
   };
 
+  // ── Exportar para IA ──────────────────────────────────────────
+  const exportProgressMD = () => {
+    const sorted = [...data.logs].sort((a, b) => b.date.localeCompare(a.date));
+    if (!sorted.length) {
+      Alert.alert('Sin datos', 'Aún no tienes sesiones registradas.');
+      return;
+    }
+    const parts = sorted.slice(0, 20).map((l) => sessionToMarkdown(l, data));
+    const md = `# Historial de entrenamiento — IronLog\n\n> Exportado para análisis con IA\n\n---\n\n${parts.join('\n\n---\n\n')}`;
+    writeAndShare('progreso.md', md);
+  };
+
+  const exportProgressJSON = () => {
+    const sorted = [...data.logs].sort((a, b) => b.date.localeCompare(a.date));
+    if (!sorted.length) {
+      Alert.alert('Sin datos', 'Aún no tienes sesiones registradas.');
+      return;
+    }
+    const out = {
+      exportado: new Date().toISOString(),
+      unidad: unit,
+      sesiones: sessionsToJSON(sorted, data),
+    };
+    writeAndShare('progreso.json', JSON.stringify(out, null, 2));
+  };
+
+  // ── Import ────────────────────────────────────────────────────
   const buildFromRows = (rows) => {
     const lib = [...data.exercises];
     const byName = {};
@@ -205,112 +247,183 @@ export default function DataScreen({ data, setData }) {
     }
   };
 
-  const Btn = ({ onPress, icon, label }) => (
+  const Row = ({ onPress, icon, label, danger }) => (
     <Pressable
-      style={[S.btn, S.btnGhost, { flex: 1, paddingVertical: 10 }]}
+      style={{
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 12,
+        paddingVertical: 14,
+        borderBottomWidth: 1,
+        borderColor: C.line,
+      }}
       onPress={onPress}
     >
-      <Icon name={icon} size={14} color={C.text} />
-      <Text style={[S.btnTextGhost, { fontSize: 12 }]}>{label}</Text>
+      <Icon name={icon} size={17} color={danger ? C.negative : C.accent} />
+      <Text
+        style={{
+          color: danger ? C.negative : C.text,
+          fontWeight: '600',
+          fontSize: 14,
+          flex: 1,
+        }}
+      >
+        {label}
+      </Text>
+      <Icon name='chevron-right' size={15} color={C.muted} />
     </Pressable>
   );
 
   return (
     <ScrollView contentContainerStyle={{ padding: 16 }}>
-      <View style={S.card}>
-        <Text style={S.label}>Importar</Text>
-        <Text style={[S.sub, { marginBottom: 12 }]}>
-          CSV con columnas rutina, dia, ejercicio, musculo, series, reps, peso
-          (más notas, descanso, descanso_ejercicio, cu) o JSON con la misma
-          estructura. Los ejercicios nuevos se añaden a tu biblioteca.
-        </Text>
-        <Pressable style={S.btn} onPress={importFile}>
-          <Icon name='upload' size={16} />
-          <Text style={S.btnText}>Subir CSV / JSON</Text>
-        </Pressable>
-        {msg && (
-          <Text
-            style={[
-              S.sub,
-              { marginTop: 10, color: msg.ok ? C.positive : C.negative },
-            ]}
-          >
-            {msg.t}
-          </Text>
-        )}
-      </View>
-
-      <View style={S.card}>
-        <Text style={S.label}>Exportar</Text>
-        <View style={[S.row, { gap: 8, flexWrap: 'wrap' }]}>
-          <Btn onPress={exportJSON} icon='download' label='Rutinas JSON' />
-          <Btn onPress={exportCSV} icon='download' label='Rutinas CSV' />
-          <Btn onPress={exportLogs} icon='download' label='Historial CSV' />
-        </View>
-      </View>
-
-      <View style={S.card}>
-        <Text style={S.label}>Unidad de peso</Text>
-        <View style={[S.row, { gap: 6 }]}>
-          {['kg', 'lb'].map((u) => (
-            <Pressable
-              key={u}
-              onPress={() =>
-                setData((d) => ({ ...d, settings: { ...d.settings, unit: u } }))
-              }
-              style={[S.pillBtn, unit === u && S.pillBtnOn]}
-            >
-              <Text style={unit === u ? S.pillTextOn : S.pillText}>{u}</Text>
-            </Pressable>
-          ))}
-        </View>
-      </View>
-
-      <View style={S.card}>
-        <Text style={S.label}>Descanso por defecto</Text>
-        <View style={[S.row, { gap: 6, flexWrap: 'wrap' }]}>
-          {[60, 90, 120, 180].map((s) => (
-            <Pressable
-              key={s}
-              onPress={() =>
-                setData((d) => ({
-                  ...d,
-                  settings: { ...d.settings, restSeconds: s },
-                }))
-              }
-              style={[
-                S.pillBtn,
-                data.settings.restSeconds === s && S.pillBtnOn,
-              ]}
-            >
-              <Text
-                style={
-                  data.settings.restSeconds === s ? S.pillTextOn : S.pillText
-                }
-              >
-                {mmss(s)}
-              </Text>
-            </Pressable>
-          ))}
-        </View>
-      </View>
-
-      <View style={S.card}>
-        <Text style={S.label}>Zona de peligro</Text>
-        <Pressable
+      {/* Importar */}
+      <Text style={S.label}>Importar</Text>
+      <Text style={[S.sub, { marginBottom: 12 }]}>
+        CSV o JSON con columnas rutina, dia, ejercicio, musculo, series, reps,
+        peso…
+      </Text>
+      <Pressable style={[S.btn, { marginBottom: 20 }]} onPress={importFile}>
+        <Icon name='upload' size={16} />
+        <Text style={S.btnText}>Subir CSV / JSON</Text>
+      </Pressable>
+      {msg && (
+        <Text
           style={[
-            S.btn,
+            S.sub,
             {
-              backgroundColor: 'transparent',
-              borderWidth: 1,
-              borderColor: C.line,
+              marginTop: -12,
+              marginBottom: 16,
+              color: msg.ok ? C.positive : C.negative,
             },
           ]}
+        >
+          {msg.t}
+        </Text>
+      )}
+
+      {/* Exportar rutinas */}
+      <Text style={S.label}>Exportar rutinas</Text>
+      <View style={{ marginBottom: 20 }}>
+        <Row onPress={exportJSON} icon='download' label='Rutinas → JSON' />
+        <Row onPress={exportCSV} icon='download' label='Rutinas → CSV' />
+        <Row
+          onPress={exportLogs}
+          icon='download'
+          label='Historial completo → CSV'
+        />
+      </View>
+
+      {/* Exportar para IA */}
+      <Text style={S.label}>Exportar progreso para IA</Text>
+      <Text style={[S.sub, { marginBottom: 10 }]}>
+        Genera un archivo listo para pasarle a un modelo de IA y que analice tu
+        progreso.
+      </Text>
+      <View style={{ marginBottom: 20 }}>
+        <Row
+          onPress={exportProgressMD}
+          icon='file-text'
+          label='Progreso → Markdown (.md)'
+        />
+        <Row onPress={exportProgressJSON} icon='code' label='Progreso → JSON' />
+      </View>
+
+      {/* Ajustes */}
+      <Text style={S.label}>Ajustes</Text>
+      <View style={{ marginBottom: 20 }}>
+        <View
+          style={{
+            paddingVertical: 14,
+            borderBottomWidth: 1,
+            borderColor: C.line,
+          }}
+        >
+          <Text style={[S.sub, { marginBottom: 8 }]}>Unidad de peso</Text>
+          <View style={[S.row, { gap: 8 }]}>
+            {['kg', 'lb'].map((u) => (
+              <Pressable
+                key={u}
+                onPress={() =>
+                  setData((d) => ({
+                    ...d,
+                    settings: { ...d.settings, unit: u },
+                  }))
+                }
+                style={[S.pillBtn, unit === u && S.pillBtnOn]}
+              >
+                <Text style={unit === u ? S.pillTextOn : S.pillText}>{u}</Text>
+              </Pressable>
+            ))}
+          </View>
+        </View>
+        <View
+          style={{
+            paddingVertical: 14,
+            borderBottomWidth: 1,
+            borderColor: C.line,
+          }}
+        >
+          <Text style={[S.sub, { marginBottom: 8 }]}>Descanso por defecto</Text>
+          <View style={[S.row, { gap: 8, flexWrap: 'wrap' }]}>
+            {[60, 90, 120, 180].map((s) => (
+              <Pressable
+                key={s}
+                onPress={() =>
+                  setData((d) => ({
+                    ...d,
+                    settings: { ...d.settings, restSeconds: s },
+                  }))
+                }
+                style={[
+                  S.pillBtn,
+                  data.settings.restSeconds === s && S.pillBtnOn,
+                ]}
+              >
+                <Text
+                  style={
+                    data.settings.restSeconds === s ? S.pillTextOn : S.pillText
+                  }
+                >
+                  {mmss(s)}
+                </Text>
+              </Pressable>
+            ))}
+          </View>
+        </View>
+      </View>
+
+      {/* Zona peligro */}
+      <Text style={S.label}>Admin</Text>
+      <View>
+        <Row
+          danger
+          onPress={() =>
+            Alert.alert(
+              'Limpiar historial',
+              '¿Borrar todos los registros de sesiones? Las rutinas y ejercicios se conservan.',
+              [
+                { text: 'Cancelar' },
+                {
+                  text: 'Limpiar historial',
+                  style: 'destructive',
+                  onPress: () => {
+                    setData((d) => ({ ...d, logs: [] }));
+                    setMsg({ ok: true, t: 'Historial eliminado.' });
+                  },
+                },
+              ],
+            )
+          }
+          icon='trash-2'
+          label='Limpiar historial (conserva rutinas)'
+        />
+        <Row
+          danger
           onPress={() =>
             Alert.alert('Restablecer', '¿Borrar todo y volver al ejemplo?', [
               { text: 'Cancelar' },
               {
-                text: 'Restablecer',
+                text: 'Restablecer todo',
                 style: 'destructive',
                 onPress: () => {
                   setData(seed());
@@ -319,15 +432,15 @@ export default function DataScreen({ data, setData }) {
               },
             ])
           }
-        >
-          <Icon name='trash-2' size={15} color={C.negative} />
-          <Text style={{ color: C.negative, fontWeight: '700' }}>
-            Restablecer todo
-          </Text>
-        </Pressable>
+          icon='alert-triangle'
+          label='Restablecer todo'
+        />
       </View>
-      <Text style={[S.sub, { textAlign: 'center', marginTop: 4 }]}>
-        Tus datos se guardan en el dispositivo.
+
+      <Text
+        style={[S.sub, { textAlign: 'center', marginTop: 20, marginBottom: 4 }]}
+      >
+        Datos guardados en el dispositivo.
       </Text>
       <View style={{ height: 20 }} />
     </ScrollView>

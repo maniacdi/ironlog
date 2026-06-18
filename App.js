@@ -5,6 +5,7 @@ import {
   Pressable,
   StatusBar,
   ActivityIndicator,
+  AppState,
 } from 'react-native';
 import {
   SafeAreaProvider,
@@ -53,6 +54,11 @@ function AppInner() {
   const loaded = useRef(false);
   const insets = useSafeAreaInsets();
 
+  // Temporizador en background: guardamos timestamp de inicio + duración total
+  const restStartedAt = useRef(null);
+  const restDuration = useRef(0);
+  const appState = useRef(AppState.currentState);
+
   useEffect(() => {
     (async () => {
       const d = await loadData();
@@ -60,14 +66,57 @@ function AppInner() {
       loaded.current = true;
     })();
   }, []);
+
   useEffect(() => {
     if (loaded.current && data) saveData(data);
   }, [data]);
+
+  // Intervalo del temporizador — usa timestamps para ser preciso
   useEffect(() => {
-    if (rest <= 0) return;
-    const t = setInterval(() => setRest((r) => (r > 0 ? r - 1 : 0)), 1000);
+    if (rest <= 0) {
+      restStartedAt.current = null;
+      return;
+    }
+    const t = setInterval(() => {
+      if (!restStartedAt.current) return;
+      const elapsed = Math.floor((Date.now() - restStartedAt.current) / 1000);
+      const remaining = restDuration.current - elapsed;
+      if (remaining <= 0) {
+        setRest(0);
+        clearInterval(t);
+      } else {
+        setRest(remaining);
+      }
+    }, 500);
     return () => clearInterval(t);
-  }, [rest > 0]);
+  }, [rest > 0 ? restDuration.current : 0]);
+
+  // Al volver a primer plano, recalcular tiempo real transcurrido
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', (nextState) => {
+      if (
+        appState.current.match(/inactive|background/) &&
+        nextState === 'active'
+      ) {
+        if (restStartedAt.current) {
+          const elapsed = Math.floor(
+            (Date.now() - restStartedAt.current) / 1000,
+          );
+          const remaining = restDuration.current - elapsed;
+          if (remaining <= 0) {
+            setRest(0);
+            restStartedAt.current = null;
+          } else {
+            restDuration.current = remaining;
+            restStartedAt.current = Date.now();
+            setRest(remaining);
+          }
+        }
+      }
+      appState.current = nextState;
+    });
+    return () => sub.remove();
+  }, []);
 
   if (!data)
     return (
@@ -87,8 +136,15 @@ function AppInner() {
 
   const unit = data.settings.unit;
   const startRest = (secs, label) => {
-    setRest(secs || data.settings.restSeconds || 90);
+    const duration = secs || data.settings.restSeconds || 90;
+    restDuration.current = duration;
+    restStartedAt.current = Date.now();
+    setRest(duration);
     setRestLabel(label || 'Descanso');
+  };
+  const stopRest = () => {
+    setRest(0);
+    restStartedAt.current = null;
   };
 
   return (
@@ -126,7 +182,7 @@ function AppInner() {
             setSession={setSession}
             unit={unit}
             startRest={startRest}
-            stopRest={() => setRest(0)}
+            stopRest={stopRest}
           />
         )}
         {tab === 'routines' && (
@@ -165,10 +221,16 @@ function AppInner() {
             {mmss(rest)}
           </Text>
           <View style={{ flex: 1 }} />
-          <Pressable style={S.iconBtn} onPress={() => setRest((r) => r + 15)}>
+          <Pressable
+            style={S.iconBtn}
+            onPress={() => {
+              restDuration.current += 15;
+              setRest((r) => r + 15);
+            }}
+          >
             <Icon name='plus' size={15} color={C.muted} />
           </Pressable>
-          <Pressable style={S.iconBtn} onPress={() => setRest(0)}>
+          <Pressable style={S.iconBtn} onPress={stopRest}>
             <Icon name='skip-forward' size={15} color={C.muted} />
           </Pressable>
         </View>
