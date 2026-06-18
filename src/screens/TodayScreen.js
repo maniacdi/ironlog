@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import {
   ScrollView,
   View,
@@ -7,6 +7,8 @@ import {
   TextInput,
   Modal,
   Alert,
+  PanResponder,
+  Animated,
 } from 'react-native';
 import { Icon } from '../components/Icon';
 import { Stepper } from '../components/Stepper';
@@ -23,6 +25,60 @@ import {
   exMuscle,
   FEELINGS,
 } from '../helpers';
+
+function SwipeToDelete({ onDelete, children }) {
+  const translateX = useRef(new Animated.Value(0)).current;
+  const pan = useRef(
+    PanResponder.create({
+      onMoveShouldSetPanResponder: (_, g) =>
+        Math.abs(g.dx) > 8 && Math.abs(g.dy) < 15,
+      onPanResponderMove: (_, g) => {
+        if (g.dx < 0) translateX.setValue(g.dx);
+      },
+      onPanResponderRelease: (_, g) => {
+        if (g.dx < -60) {
+          Animated.timing(translateX, {
+            toValue: -300,
+            duration: 180,
+            useNativeDriver: true,
+          }).start(onDelete);
+        } else {
+          Animated.spring(translateX, {
+            toValue: 0,
+            useNativeDriver: true,
+          }).start();
+        }
+      },
+    }),
+  ).current;
+
+  return (
+    <View style={{ overflow: 'hidden' }}>
+      {/* Fondo rojo que aparece al deslizar */}
+      <View
+        style={{
+          position: 'absolute',
+          right: 0,
+          top: 0,
+          bottom: 0,
+          width: 80,
+          backgroundColor: C.negative,
+          alignItems: 'center',
+          justifyContent: 'center',
+          borderRadius: 8,
+        }}
+      >
+        <Icon name='trash-2' size={16} color='#fff' />
+      </View>
+      <Animated.View
+        style={{ transform: [{ translateX }] }}
+        {...pan.panHandlers}
+      >
+        {children}
+      </Animated.View>
+    </View>
+  );
+}
 
 export default function TodayScreen({
   data,
@@ -473,12 +529,13 @@ export default function TodayScreen({
                       flexDirection: 'row',
                       marginTop: 12,
                       marginBottom: 2,
+                      alignItems: 'center',
                     }}
                   >
                     <Text
                       style={[
                         S.sub,
-                        { width: 28, textAlign: 'center', fontSize: 11 },
+                        { width: 20, textAlign: 'center', fontSize: 11 },
                       ]}
                     ></Text>
                     <Text
@@ -497,123 +554,136 @@ export default function TodayScreen({
                     >
                       PESO{ex.perSide ? ' c/u' : ''}
                     </Text>
-                    <Text style={{ width: 34 + 34 + 8 }}></Text>
+                    <Text style={{ width: 30 + 30 + 6 }}></Text>
                   </View>
 
                   {ex.sets.map((s, si) => (
-                    <View
+                    <SwipeToDelete
                       key={si}
-                      style={{
-                        flexDirection: 'row',
-                        alignItems: 'center',
-                        marginTop: 8,
-                        gap: 6,
-                        opacity: s.skipped ? 0.35 : 1,
-                      }}
+                      onDelete={() =>
+                        mut((n) => n.entries[ei].sets.splice(si, 1))
+                      }
                     >
-                      <Text
+                      <View
                         style={{
-                          width: 24,
-                          textAlign: 'center',
-                          color: s.skipped ? C.skipped : C.muted,
-                          fontWeight: '700',
+                          flexDirection: 'row',
+                          alignItems: 'center',
+                          marginTop: 8,
+                          gap: 5,
+                          opacity: s.skipped ? 0.35 : 1,
+                          backgroundColor: C.surface,
                         }}
                       >
-                        {si + 1}
-                      </Text>
-                      <View style={{ flex: 1 }}>
-                        <Stepper
-                          value={s.reps}
-                          step={1}
-                          disabled={s.skipped || s.done}
-                          onChange={(v) =>
-                            mut((n) => (n.entries[ei].sets[si].reps = v))
-                          }
-                        />
-                      </View>
-                      <View style={{ flex: 1 }}>
-                        <Stepper
-                          value={s.weight}
-                          step={2.5}
-                          disabled={s.skipped || s.done}
-                          onChange={(v) =>
-                            mut((n) => (n.entries[ei].sets[si].weight = v))
-                          }
-                        />
-                      </View>
-                      {/* Check / saltar serie */}
-                      <Pressable
-                        onPress={() => {
-                          if (s.skipped) return;
-                          const willDo = !s.done;
-                          mut((n) => {
-                            n.entries[ei].sets[si].done = willDo;
-                            if (willDo) {
-                              const isLast = si === ex.sets.length - 1;
-                              if (isLast && ex.restAfter)
-                                startRest(ex.restAfter, 'Cambio de ejercicio');
-                              else startRest(ex.rest);
+                        <Text
+                          style={{
+                            width: 20,
+                            textAlign: 'center',
+                            color: s.skipped ? C.skipped : C.muted,
+                            fontWeight: '700',
+                            fontSize: 13,
+                          }}
+                        >
+                          {si + 1}
+                        </Text>
+                        <View style={{ flex: 1 }}>
+                          <Stepper
+                            value={s.reps}
+                            step={1}
+                            disabled={s.skipped || s.done}
+                            onChange={(v) =>
+                              mut((n) => (n.entries[ei].sets[si].reps = v))
                             }
-                          });
-                          // Auto-colapsar si todas las series quedan resueltas
-                          setSession((prev) => {
-                            const copy = clone(prev);
-                            copy.entries[ei].sets[si].done = !s.done;
-                            const allSettled = copy.entries[ei].sets.every(
-                              (x) => x.done || x.skipped,
-                            );
-                            if (allSettled && !s.done)
-                              setCollapsed((c) => ({ ...c, [ei]: true }));
-                            return copy;
-                          });
-                        }}
-                        onLongPress={() =>
-                          mut((n) => n.entries[ei].sets.splice(si, 1))
-                        }
-                        style={[
-                          S.iconBtn,
-                          s.done && { backgroundColor: C.positive },
-                          s.skipped && { backgroundColor: C.surface2 },
-                        ]}
-                      >
-                        <Icon
-                          name={s.skipped ? 'minus' : 'check'}
-                          size={16}
-                          color={
-                            s.done ? '#06231a' : s.skipped ? C.skipped : C.muted
-                          }
-                        />
-                      </Pressable>
-                      {/* Saltar serie individual */}
-                      <Pressable
-                        onPress={() => {
-                          mut((n) => {
-                            const cur = n.entries[ei].sets[si].skipped;
-                            n.entries[ei].sets[si].skipped = !cur;
-                            n.entries[ei].sets[si].done = false;
-                          });
-                          setSession((prev) => {
-                            const copy = clone(prev);
-                            const allSettled = copy.entries[ei].sets.every(
-                              (x) => x.done || x.skipped,
-                            );
-                            if (allSettled)
-                              setCollapsed((c) => ({ ...c, [ei]: true }));
-                            return copy;
-                          });
-                        }}
-                        style={[
-                          S.iconBtn,
-                          s.skipped && { backgroundColor: C.surface2 },
-                        ]}
-                      >
-                        <Icon
-                          name='skip-forward'
-                          size={14}
-                          color={s.skipped ? C.accent : C.muted}
-                        />
-                      </Pressable>
-                    </View>
+                          />
+                        </View>
+                        <View style={{ flex: 1 }}>
+                          <Stepper
+                            value={s.weight}
+                            step={2.5}
+                            disabled={s.skipped || s.done}
+                            onChange={(v) =>
+                              mut((n) => (n.entries[ei].sets[si].weight = v))
+                            }
+                          />
+                        </View>
+                        {/* Check */}
+                        <Pressable
+                          onPress={() => {
+                            if (s.skipped) return;
+                            const willDo = !s.done;
+                            mut((n) => {
+                              n.entries[ei].sets[si].done = willDo;
+                              if (willDo) {
+                                const isLast = si === ex.sets.length - 1;
+                                if (isLast && ex.restAfter)
+                                  startRest(
+                                    ex.restAfter,
+                                    'Cambio de ejercicio',
+                                  );
+                                else startRest(ex.rest);
+                              }
+                            });
+                            setSession((prev) => {
+                              const copy = clone(prev);
+                              copy.entries[ei].sets[si].done = !s.done;
+                              const allSettled = copy.entries[ei].sets.every(
+                                (x) => x.done || x.skipped,
+                              );
+                              if (allSettled && !s.done)
+                                setCollapsed((c) => ({ ...c, [ei]: true }));
+                              return copy;
+                            });
+                          }}
+                          style={[
+                            S.iconBtn,
+                            { width: 30, height: 36 },
+                            s.done && { backgroundColor: C.positive },
+                            s.skipped && { backgroundColor: C.surface2 },
+                          ]}
+                        >
+                          <Icon
+                            name={s.skipped ? 'minus' : 'check'}
+                            size={15}
+                            color={
+                              s.done
+                                ? '#06231a'
+                                : s.skipped
+                                  ? C.skipped
+                                  : C.muted
+                            }
+                          />
+                        </Pressable>
+                        {/* Skip serie */}
+                        <Pressable
+                          onPress={() => {
+                            mut((n) => {
+                              const cur = n.entries[ei].sets[si].skipped;
+                              n.entries[ei].sets[si].skipped = !cur;
+                              n.entries[ei].sets[si].done = false;
+                            });
+                            setSession((prev) => {
+                              const copy = clone(prev);
+                              const allSettled = copy.entries[ei].sets.every(
+                                (x) => x.done || x.skipped,
+                              );
+                              if (allSettled)
+                                setCollapsed((c) => ({ ...c, [ei]: true }));
+                              return copy;
+                            });
+                          }}
+                          style={[
+                            S.iconBtn,
+                            { width: 30, height: 36 },
+                            s.skipped && { backgroundColor: C.surface2 },
+                          ]}
+                        >
+                          <Icon
+                            name='skip-forward'
+                            size={13}
+                            color={s.skipped ? C.accent : C.muted}
+                          />
+                        </Pressable>
+                      </View>
+                    </SwipeToDelete>
                   ))}
 
                   <Pressable
