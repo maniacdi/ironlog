@@ -26,22 +26,28 @@ import {
   FEELINGS,
 } from '../helpers';
 
-function SwipeToDelete({ onDelete, children }) {
+function SwipeRow({ onDelete, onSkip, children }) {
   const translateX = useRef(new Animated.Value(0)).current;
   const pan = useRef(
     PanResponder.create({
       onMoveShouldSetPanResponder: (_, g) =>
         Math.abs(g.dx) > 8 && Math.abs(g.dy) < 15,
-      onPanResponderMove: (_, g) => {
-        if (g.dx < 0) translateX.setValue(g.dx);
-      },
+      onPanResponderMove: (_, g) => translateX.setValue(g.dx),
       onPanResponderRelease: (_, g) => {
-        if (g.dx < -60) {
+        if (g.dx < -70) {
+          // izquierda → borrar, sale por la izquierda
           Animated.timing(translateX, {
-            toValue: -300,
+            toValue: -400,
             duration: 180,
             useNativeDriver: true,
           }).start(onDelete);
+        } else if (g.dx > 70) {
+          // derecha → skip, vuelve al sitio
+          Animated.spring(translateX, {
+            toValue: 0,
+            useNativeDriver: true,
+          }).start();
+          onSkip();
         } else {
           Animated.spring(translateX, {
             toValue: 0,
@@ -53,30 +59,9 @@ function SwipeToDelete({ onDelete, children }) {
   ).current;
 
   return (
-    <View style={{ overflow: 'hidden' }}>
-      {/* Fondo rojo que aparece al deslizar */}
-      <View
-        style={{
-          position: 'absolute',
-          right: 0,
-          top: 0,
-          bottom: 0,
-          width: 80,
-          backgroundColor: C.negative,
-          alignItems: 'center',
-          justifyContent: 'center',
-          borderRadius: 8,
-        }}
-      >
-        <Icon name='trash-2' size={16} color='#fff' />
-      </View>
-      <Animated.View
-        style={{ transform: [{ translateX }] }}
-        {...pan.panHandlers}
-      >
-        {children}
-      </Animated.View>
-    </View>
+    <Animated.View style={{ transform: [{ translateX }] }} {...pan.panHandlers}>
+      {children}
+    </Animated.View>
   );
 }
 
@@ -535,7 +520,7 @@ export default function TodayScreen({
                     <Text
                       style={[
                         S.sub,
-                        { width: 20, textAlign: 'center', fontSize: 11 },
+                        { width: 14, textAlign: 'center', fontSize: 11 },
                       ]}
                     ></Text>
                     <Text
@@ -554,15 +539,31 @@ export default function TodayScreen({
                     >
                       PESO{ex.perSide ? ' c/u' : ''}
                     </Text>
-                    <Text style={{ width: 30 + 30 + 6 }}></Text>
+                    <Text style={{ width: 36 }}></Text>
                   </View>
 
                   {ex.sets.map((s, si) => (
-                    <SwipeToDelete
+                    <SwipeRow
                       key={si}
                       onDelete={() =>
                         mut((n) => n.entries[ei].sets.splice(si, 1))
                       }
+                      onSkip={() => {
+                        mut((n) => {
+                          const cur = n.entries[ei].sets[si].skipped;
+                          n.entries[ei].sets[si].skipped = !cur;
+                          n.entries[ei].sets[si].done = false;
+                        });
+                        setSession((prev) => {
+                          const copy = clone(prev);
+                          const allSettled = copy.entries[ei].sets.every(
+                            (x) => x.done || x.skipped,
+                          );
+                          if (allSettled)
+                            setCollapsed((c) => ({ ...c, [ei]: true }));
+                          return copy;
+                        });
+                      }}
                     >
                       <View
                         style={{
@@ -576,11 +577,11 @@ export default function TodayScreen({
                       >
                         <Text
                           style={{
-                            width: 20,
+                            width: 14,
                             textAlign: 'center',
                             color: s.skipped ? C.skipped : C.muted,
                             fontWeight: '700',
-                            fontSize: 13,
+                            fontSize: 12,
                           }}
                         >
                           {si + 1}
@@ -635,14 +636,14 @@ export default function TodayScreen({
                           }}
                           style={[
                             S.iconBtn,
-                            { width: 30, height: 36 },
+                            { width: 36, height: 36 },
                             s.done && { backgroundColor: C.positive },
                             s.skipped && { backgroundColor: C.surface2 },
                           ]}
                         >
                           <Icon
                             name={s.skipped ? 'minus' : 'check'}
-                            size={15}
+                            size={16}
                             color={
                               s.done
                                 ? '#06231a'
@@ -652,39 +653,12 @@ export default function TodayScreen({
                             }
                           />
                         </Pressable>
-                        {/* Skip serie */}
-                        <Pressable
-                          onPress={() => {
-                            mut((n) => {
-                              const cur = n.entries[ei].sets[si].skipped;
-                              n.entries[ei].sets[si].skipped = !cur;
-                              n.entries[ei].sets[si].done = false;
-                            });
-                            setSession((prev) => {
-                              const copy = clone(prev);
-                              const allSettled = copy.entries[ei].sets.every(
-                                (x) => x.done || x.skipped,
-                              );
-                              if (allSettled)
-                                setCollapsed((c) => ({ ...c, [ei]: true }));
-                              return copy;
-                            });
-                          }}
-                          style={[
-                            S.iconBtn,
-                            { width: 30, height: 36 },
-                            s.skipped && { backgroundColor: C.surface2 },
-                          ]}
-                        >
-                          <Icon
-                            name='skip-forward'
-                            size={13}
-                            color={s.skipped ? C.accent : C.muted}
-                          />
-                        </Pressable>
                       </View>
-                    </SwipeToDelete>
+                    </SwipeRow>
                   ))}
+                  <Text style={[S.sub, { fontSize: 11, marginTop: 6 }]}>
+                    ← borrar · skip serie →
+                  </Text>
 
                   <Pressable
                     onPress={() =>
@@ -768,14 +742,7 @@ export default function TodayScreen({
             Cancelar entrenamiento
           </Text>
         </Pressable>
-        <Text
-          style={[
-            S.sub,
-            { textAlign: 'center', marginTop: 4, marginBottom: 20 },
-          ]}
-        >
-          Mantén check para borrar · skip para saltar serie
-        </Text>
+        <View style={{ height: 20 }} />
       </ScrollView>
     );
   }
