@@ -25,6 +25,12 @@ import {
   exMuscle,
   FEELINGS,
 } from '../helpers';
+import {
+  initHealthConnect,
+  hasHealthPermissions,
+  requestHealthPermissions,
+  readSessionHealthData,
+} from '../healthConnect';
 
 function SwipeRow({ onDelete, onSkip, children }) {
   const translateX = useRef(new Animated.Value(0)).current;
@@ -77,6 +83,7 @@ export default function TodayScreen({
   const [picking, setPicking] = useState(false);
   const [summary, setSummary] = useState(null);
   const [collapsed, setCollapsed] = useState({});
+  const [detail, setDetail] = useState(null);
 
   const lastWeightFor = (exId) => {
     const logs = data.logs
@@ -139,6 +146,16 @@ export default function TodayScreen({
     });
     setCollapsed({});
     setPicking(false);
+    // Pedimos permiso de Health Connect en segundo plano, sin bloquear el inicio del entreno.
+    // Si el usuario ya lo concedió antes, esto no muestra ningún diálogo.
+    (async () => {
+      try {
+        const ok = await initHealthConnect();
+        if (!ok) return;
+        const already = await hasHealthPermissions();
+        if (!already) await requestHealthPermissions();
+      } catch {}
+    })();
   };
 
   const mut = (fn) =>
@@ -181,7 +198,7 @@ export default function TodayScreen({
     );
   };
 
-  const finish = () => {
+  const finish = async () => {
     const entries = session.entries
       .map((e) => ({
         exerciseId: e.exerciseId,
@@ -205,11 +222,14 @@ export default function TodayScreen({
       if (top > (orig.prevBest || 0) + 0.01)
         prs.push(exName(data, e.exerciseId));
     });
-    const durationMin = session.startedAt
-      ? Math.max(1, Math.round((Date.now() - session.startedAt) / 60000))
+    const startedAt = session.startedAt;
+    const endedAt = Date.now();
+    const durationMin = startedAt
+      ? Math.max(1, Math.round((endedAt - startedAt) / 60000))
       : null;
+    const logId = uid();
     const log = {
-      id: uid(),
+      id: logId,
       date: todayISO(),
       routineId: session.routineId,
       dayId: session.dayId,
@@ -218,6 +238,7 @@ export default function TodayScreen({
       note: session.note,
       durationMin,
       entries,
+      health: null,
     };
     setData((d) => ({ ...d, logs: [...d.logs, log] }));
     setSummary({
@@ -232,6 +253,30 @@ export default function TodayScreen({
     });
     setSession(null);
     stopRest();
+
+    // Intentamos enriquecer con datos del reloj (Samsung Health vía Health Connect).
+    // No bloquea el guardado: si falla o no hay permisos, el log se queda sin 'health'.
+    if (startedAt) {
+      try {
+        const ok = await initHealthConnect();
+        if (ok) {
+          const granted = await hasHealthPermissions();
+          if (granted) {
+            const health = await readSessionHealthData(startedAt, endedAt);
+            if (health) {
+              setData((d) => ({
+                ...d,
+                logs: d.logs.map((l) =>
+                  l.id === logId ? { ...l, health } : l,
+                ),
+              }));
+            }
+          }
+        }
+      } catch {
+        // silencioso: la sesión ya está guardada igualmente
+      }
+    }
   };
 
   if (summary)
@@ -795,8 +840,9 @@ export default function TodayScreen({
           ),
         );
         return (
-          <View
+          <Pressable
             key={l.id}
+            onPress={() => setDetail(l)}
             style={{
               flexDirection: 'row',
               alignItems: 'center',
@@ -813,6 +859,9 @@ export default function TodayScreen({
                 {!!l.feeling && (
                   <Text style={[S.sub, { fontSize: 12 }]}>{l.feeling}</Text>
                 )}
+                {!!l.health?.avgHr && (
+                  <Icon name='heart' size={12} color={C.negative} />
+                )}
               </View>
               <Text style={S.sub}>
                 {fmtDate(l.date)} · {l.entries.length} ejercicios · {sets}{' '}
@@ -826,7 +875,10 @@ export default function TodayScreen({
               </Text>
               <Text style={S.sub}>{unit}</Text>
             </View>
-          </View>
+            <View style={{ marginLeft: 8 }}>
+              <Icon name='chevron-right' size={16} color={C.muted} />
+            </View>
+          </Pressable>
         );
       })}
 
@@ -924,6 +976,188 @@ export default function TodayScreen({
             <View style={{ height: 20 }} />
           </ScrollView>
         </View>
+      </Modal>
+
+      <Modal
+        visible={!!detail}
+        animationType='slide'
+        presentationStyle='fullScreen'
+        onRequestClose={() => setDetail(null)}
+      >
+        {detail && (
+          <View style={{ flex: 1, backgroundColor: C.bg }}>
+            <View
+              style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                padding: 16,
+                borderBottomWidth: 1,
+                borderColor: C.line,
+                backgroundColor: C.surface,
+              }}
+            >
+              <Pressable
+                onPress={() => setDetail(null)}
+                style={[S.iconBtn, { marginRight: 12 }]}
+              >
+                <Icon name='chevron-left' size={18} color={C.text} />
+              </Pressable>
+              <View style={{ flex: 1 }}>
+                <Text style={[S.disp, { fontSize: 18 }]}>{detail.dayName}</Text>
+                <Text style={S.sub}>{fmtDateLong(detail.date)}</Text>
+              </View>
+            </View>
+
+            <ScrollView contentContainerStyle={{ padding: 16 }}>
+              {/* Stats generales */}
+              <View style={[S.row, { gap: 10, flexWrap: 'wrap' }]}>
+                <View style={S.stat}>
+                  <Text style={[S.bignum, { fontSize: 22, color: C.accent }]}>
+                    {Math.round(
+                      detail.entries.reduce(
+                        (a, e) =>
+                          a +
+                          e.sets
+                            .filter((s) => s.done)
+                            .reduce(
+                              (x, s) => x + (s.weight || 0) * (s.reps || 0),
+                              0,
+                            ),
+                        0,
+                      ),
+                    )}
+                  </Text>
+                  <Text style={S.sub}>vol ({unit})</Text>
+                </View>
+                {detail.durationMin != null && (
+                  <View style={S.stat}>
+                    <Text style={[S.bignum, { fontSize: 22 }]}>
+                      {detail.durationMin}'
+                    </Text>
+                    <Text style={S.sub}>duración</Text>
+                  </View>
+                )}
+                {!!detail.health?.avgHr && (
+                  <View style={S.stat}>
+                    <View
+                      style={{
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        gap: 4,
+                      }}
+                    >
+                      <Icon name='heart' size={14} color={C.negative} />
+                      <Text style={[S.bignum, { fontSize: 22 }]}>
+                        {detail.health.avgHr}
+                      </Text>
+                    </View>
+                    <Text style={S.sub}>fc media</Text>
+                  </View>
+                )}
+                {!!detail.health?.maxHr && (
+                  <View style={S.stat}>
+                    <Text
+                      style={[S.bignum, { fontSize: 22, color: C.negative }]}
+                    >
+                      {detail.health.maxHr}
+                    </Text>
+                    <Text style={S.sub}>fc máx</Text>
+                  </View>
+                )}
+                {!!detail.health?.kcal && (
+                  <View style={S.stat}>
+                    <Text style={[S.bignum, { fontSize: 22 }]}>
+                      {detail.health.kcal}
+                    </Text>
+                    <Text style={S.sub}>kcal</Text>
+                  </View>
+                )}
+              </View>
+
+              {!detail.health && (
+                <Text style={[S.sub, { marginTop: 12, fontSize: 12 }]}>
+                  Sin datos del reloj para esta sesión. Asegúrate de que Samsung
+                  Health esté sincronizado y de haber concedido permiso a Health
+                  Connect.
+                </Text>
+              )}
+
+              {!!detail.feeling && (
+                <View style={{ marginTop: 16 }}>
+                  <Text style={S.label}>Sensación</Text>
+                  <Text style={{ color: C.text }}>{detail.feeling}</Text>
+                </View>
+              )}
+              {!!detail.note && (
+                <View style={{ marginTop: 12 }}>
+                  <Text style={S.label}>Nota</Text>
+                  <Text style={{ color: C.text }}>{detail.note}</Text>
+                </View>
+              )}
+
+              {/* Ejercicios */}
+              <Text style={[S.label, { marginTop: 20 }]}>Ejercicios</Text>
+              {detail.entries.map((e, i) => (
+                <View key={i} style={[S.card, e.skipped && { opacity: 0.5 }]}>
+                  <View
+                    style={{
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                    }}
+                  >
+                    <Text
+                      style={{
+                        color: C.text,
+                        fontWeight: '700',
+                        fontSize: 14,
+                        textDecorationLine: e.skipped ? 'line-through' : 'none',
+                      }}
+                    >
+                      {exName(data, e.exerciseId)}
+                    </Text>
+                    <Text style={[S.sub, { color: C.blue, fontSize: 12 }]}>
+                      {exMuscle(data, e.exerciseId)}
+                    </Text>
+                  </View>
+                  {e.skipped ? (
+                    <Text style={[S.sub, { color: C.skipped, marginTop: 6 }]}>
+                      Saltado
+                    </Text>
+                  ) : (
+                    <View style={{ marginTop: 8 }}>
+                      {e.sets.map((s, si) => (
+                        <Text
+                          key={si}
+                          style={[
+                            S.sub,
+                            { fontSize: 13, opacity: s.skipped ? 0.4 : 1 },
+                          ]}
+                        >
+                          Serie {si + 1}:{' '}
+                          {s.skipped
+                            ? 'saltada'
+                            : `${s.reps} reps × ${s.weight}${unit}`}
+                        </Text>
+                      ))}
+                    </View>
+                  )}
+                  {!!e.note && (
+                    <Text
+                      style={[
+                        S.sub,
+                        { marginTop: 6, fontSize: 12, fontStyle: 'italic' },
+                      ]}
+                    >
+                      {e.note}
+                    </Text>
+                  )}
+                </View>
+              ))}
+              <View style={{ height: 30 }} />
+            </ScrollView>
+          </View>
+        )}
       </Modal>
     </ScrollView>
   );
