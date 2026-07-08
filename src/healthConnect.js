@@ -1,15 +1,12 @@
 import { Platform } from 'react-native';
 
-// Health Connect solo existe en Android. En iOS estas funciones son no-ops seguros.
 let HC = null;
 if (Platform.OS === 'android') {
-  // Import perezoso: evita romper Metro/iOS si el módulo nativo no está enlazado.
   HC = require('react-native-health-connect');
 }
 
 const PERMISSIONS = [
   { accessType: 'read', recordType: 'HeartRate' },
-  { accessType: 'read', recordType: 'ActiveCaloriesBurned' },
   { accessType: 'read', recordType: 'TotalCaloriesBurned' },
   { accessType: 'read', recordType: 'ExerciseSession' },
 ];
@@ -36,8 +33,7 @@ export async function initHealthConnect() {
 export async function requestHealthPermissions() {
   if (!HC) return [];
   try {
-    const granted = await HC.requestPermission(PERMISSIONS);
-    return granted;
+    return await HC.requestPermission(PERMISSIONS);
   } catch {
     return [];
   }
@@ -57,8 +53,6 @@ export async function hasHealthPermissions() {
   }
 }
 
-// Lee FC media/máx y kcal activas quemadas entre dos timestamps (ms).
-// Devuelve null si Health Connect no está disponible o no hay datos.
 export async function readSessionHealthData(startMs, endMs) {
   if (!HC) return null;
   const timeRangeFilter = {
@@ -68,27 +62,61 @@ export async function readSessionHealthData(startMs, endMs) {
   };
 
   try {
-    const [hrRes, calRes] = await Promise.all([
-      HC.readRecords('HeartRate', { timeRangeFilter }),
-      HC.readRecords('ActiveCaloriesBurned', { timeRangeFilter }),
+    const [hrRes, calRes, exRes] = await Promise.all([
+      HC.readRecords('HeartRate', { timeRangeFilter }).catch(() => ({
+        records: [],
+      })),
+      HC.readRecords('TotalCaloriesBurned', { timeRangeFilter }).catch(() => ({
+        records: [],
+      })),
+      HC.readRecords('ExerciseSession', { timeRangeFilter }).catch(() => ({
+        records: [],
+      })),
     ]);
 
-    // Cada registro de FC trae un array de muestras; las aplanamos todas.
-    const samples = (hrRes.records || []).flatMap((r) => r.samples || []);
-    const bpmValues = samples
+    // FC — desde registros independientes de HeartRate
+    const hrSamples = (hrRes.records || []).flatMap((r) => r.samples || []);
+    const bpmValues = hrSamples
       .map((s) => s.beatsPerMinute)
-      .filter((v) => typeof v === 'number');
+      .filter((v) => typeof v === 'number' && v > 0);
 
-    const avgHr = bpmValues.length
-      ? Math.round(bpmValues.reduce((a, b) => a + b, 0) / bpmValues.length)
+    // FC — también desde ExerciseSession si tiene samples (Samsung a veces los mete aquí)
+    const exSamples = (exRes.records || []).flatMap((r) => r.samples || []);
+    const exBpm = exSamples
+      .map((s) => s.beatsPerMinute)
+      .filter((v) => typeof v === 'number' && v > 0);
+    const allBpm = [...bpmValues, ...exBpm];
+
+    const avgHr = allBpm.length
+      ? Math.round(allBpm.reduce((a, b) => a + b, 0) / allBpm.length)
       : null;
-    const maxHr = bpmValues.length ? Math.max(...bpmValues) : null;
-    const minHr = bpmValues.length ? Math.min(...bpmValues) : null;
+    const maxHr = allBpm.length ? Math.max(...allBpm) : null;
+    const minHr = allBpm.length ? Math.min(...allBpm) : null;
 
-    const kcal = (calRes.records || []).reduce(
-      (acc, r) => acc + (r.energy?.inKilocalories || 0),
-      0,
-    );
+    // Kcal — TotalCaloriesBurned
+    const kcalTotal = (calRes.records || []).reduce((acc, r) => {
+      const v = r.energy?.inKilocalories ?? r.energy?.inCalories / 1000 ?? 0;
+      return acc + v;
+    }, 0);
+
+    // Si no hay kcal en Total, intenta desde ExerciseSession
+    const kcalEx = (exRes.records || []).reduce((acc, r) => {
+      const v = r.energy?.inKilocalories ?? r.energy?.inCalories / 1000 ?? 0;
+      return acc + v;
+    }, 0);
+
+    const kcal = Math.round(kcalTotal || kcalEx) || null;
+
+    // Duración real desde ExerciseSession si la hay
+    let durationMin = null;
+    if (exRes.records?.length) {
+      const ex = exRes.records[0];
+      if (ex.startTime && ex.endTime) {
+        durationMin = Math.round(
+          (new Date(ex.endTime) - new Date(ex.startTime)) / 60000,
+        );
+      }
+    }
 
     if (avgHr == null && !kcal) return null;
 
@@ -96,8 +124,9 @@ export async function readSessionHealthData(startMs, endMs) {
       avgHr,
       maxHr,
       minHr,
-      kcal: kcal ? Math.round(kcal) : null,
-      samples: bpmValues.length,
+      kcal,
+      durationMin,
+      samples: allBpm.length,
       source: 'Samsung Health / Health Connect',
     };
   } catch {

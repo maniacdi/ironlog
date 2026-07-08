@@ -7,9 +7,7 @@
     "userInterfaceStyle": "dark",
     "backgroundColor": "#0E0F12",
     "icon": "./assets/icon.png",
-    "assetBundlePatterns": [
-      "**/*"
-    ],
+    "assetBundlePatterns": ["**/*"],
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.ironlog.app"
@@ -22,11 +20,6 @@
       },
       "permissions": [
         "android.permission.health.READ_HEART_RATE",
-        "android.permission.health.READ_ACTIVE_CALORIES_BURNED",
-        "android.permission.health.READ_TOTAL_CALORIES_BURNED",
-        "android.permission.health.READ_EXERCISE",
-        "android.permission.health.READ_HEART_RATE",
-        "android.permission.health.READ_ACTIVE_CALORIES_BURNED",
         "android.permission.health.READ_TOTAL_CALORIES_BURNED",
         "android.permission.health.READ_EXERCISE"
       ]
@@ -59,12 +52,6 @@
       "eas": {
         "projectId": "9f59ab89-6b9e-4f08-b41e-a33c5bdd7e88"
       }
-    },
-    "runtimeVersion": {
-      "policy": "appVersion"
-    },
-    "updates": {
-      "url": "https://u.expo.dev/9f59ab89-6b9e-4f08-b41e-a33c5bdd7e88"
     }
   }
 }
