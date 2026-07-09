@@ -93,17 +93,54 @@ export async function hasHealthPermissions() {
   return ok;
 }
 
-// Lee un tipo de record y loguea cuántos vinieron o el error concreto.
+// Lee un tipo de record PAGINANDO (readRecords devuelve solo una página;
+// sin paginar perdíamos samples posteriores, p.ej. los picos de FC).
 async function readType(recordType, timeRangeFilter) {
   if (!HC) return [];
+  const all = [];
+  let pageToken;
+  let pages = 0;
   try {
-    const res = await HC.readRecords(recordType, { timeRangeFilter });
-    const records = res?.records || [];
-    log(`read ${recordType} =`, records.length, 'registros');
-    return records;
+    do {
+      const res = await HC.readRecords(recordType, {
+        timeRangeFilter,
+        pageSize: 1000,
+        ...(pageToken ? { pageToken } : {}),
+      });
+      all.push(...(res?.records || []));
+      pageToken = res?.pageToken;
+      pages++;
+    } while (pageToken && pages < 25);
+    log(`read ${recordType} =`, all.length, `registros (${pages} pág)`);
+    return all;
   } catch (e) {
     log(`read ${recordType} ERROR`, String(e?.message || e));
-    return [];
+    return all;
+  }
+}
+
+// Agregado nativo de Health Connect: min/max/avg de FC calculados por HC
+// sobre TODOS los samples (más fiable que promediar la muestra que leemos).
+async function aggregateHeartRate(timeRangeFilter) {
+  if (!HC || typeof HC.aggregateRecord !== 'function') return null;
+  try {
+    const res = await HC.aggregateRecord({
+      recordType: 'HeartRate',
+      timeRangeFilter,
+    });
+    const num = (v) => (typeof v === 'number' && v > 0 ? Math.round(v) : null);
+    const out = {
+      minHr: num(res?.BPM_MIN),
+      maxHr: num(res?.BPM_MAX),
+      avgHr: num(res?.BPM_AVG),
+    };
+    log('aggregate HR =', out);
+    if (out.minHr == null && out.maxHr == null && out.avgHr == null)
+      return null;
+    return out;
+  } catch (e) {
+    log('aggregate HR ERROR', String(e?.message || e));
+    return null;
   }
 }
 
@@ -133,11 +170,21 @@ export async function readSessionHealthData(startMs, endMs) {
     .sort((a, b) => (a.t || 0) - (b.t || 0));
   const bpmValues = hrSamples.map((s) => s.bpm);
 
-  const avgHr = bpmValues.length
+  // Stats desde la muestra leída…
+  const sAvg = bpmValues.length
     ? Math.round(bpmValues.reduce((a, b) => a + b, 0) / bpmValues.length)
     : null;
-  const maxHr = bpmValues.length ? Math.max(...bpmValues) : null;
-  const minHr = bpmValues.length ? Math.min(...bpmValues) : null;
+  const sMax = bpmValues.length ? Math.max(...bpmValues) : null;
+  const sMin = bpmValues.length ? Math.min(...bpmValues) : null;
+
+  // …y las cruzamos con el agregado nativo de HC, quedándonos con el pico real.
+  const agg = await aggregateHeartRate(timeRangeFilter);
+  const avgHr = agg?.avgHr ?? sAvg;
+  const maxHr = Math.max(agg?.maxHr ?? 0, sMax ?? 0) || null;
+  const minHr =
+    agg?.minHr != null && sMin != null
+      ? Math.min(agg.minHr, sMin)
+      : (agg?.minHr ?? sMin);
 
   // Serie temporal reducida a ~40 puntos para la gráfica de sesión
   const MAX_POINTS = 40;

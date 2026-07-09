@@ -38,13 +38,21 @@ export async function scheduleRestDone(seconds, label) {
   const ok = await ensureReady();
   if (!ok || seconds <= 0) return null;
   try {
+    // El trigger DEBE llevar type TIME_INTERVAL; sin él, dispara al instante.
+    const intervalType =
+      Notifications.SchedulableTriggerInputTypes?.TIME_INTERVAL ||
+      'timeInterval';
     return await Notifications.scheduleNotificationAsync({
       content: {
         title: '¡Descanso terminado!',
         body: label && label !== 'Descanso' ? label : 'Toca la siguiente serie 💪',
         sound: true,
       },
-      trigger: { seconds, channelId: 'rest-timer' },
+      trigger: {
+        type: intervalType,
+        seconds: Math.max(1, Math.round(seconds)),
+        channelId: 'rest-timer',
+      },
     });
   } catch {
     return null;
