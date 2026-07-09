@@ -28,12 +28,10 @@ export const S = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
   },
-  // Cards — borde hairline para bordes definidos, sin relleno pesado
+  // Cards — bloques planos rellenos; separan por contraste, no por borde
   card: {
     backgroundColor: C.surface,
     borderRadius: 12,
-    borderWidth: 1,
-    borderColor: C.line,
     padding: 15,
     marginBottom: 10,
   },

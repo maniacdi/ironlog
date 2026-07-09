@@ -3,7 +3,7 @@ import { ScrollView, View, Text, Pressable, TextInput } from "react-native";
 import { Icon } from "../components/Icon";
 import { Stepper } from "../components/Stepper";
 import { ExercisePicker } from "../components/ExercisePicker";
-import { C, S } from "../theme";
+import { C, S, DISPLAY } from "../theme";
 import { uid, clone, norm, exName } from "../helpers";
 
 export default function RoutinesScreen({ data, setData, unit }) {
@@ -67,74 +67,95 @@ export default function RoutinesScreen({ data, setData, unit }) {
 function RoutineEditor({ routine, exercises, dataRef, createExercise, onSave, onCancel, unit }) {
   const [r, setR] = useState(clone(routine));
   const [picker, setPicker] = useState(null);
+  const [adv, setAdv] = useState({}); // opciones avanzadas abiertas por id de ejercicio
   const set = (fn) => setR((p) => { const n = clone(p); fn(n); return n; });
   const move = (arr, i, dir) => { const j = i + dir; if (j < 0 || j >= arr.length) return; const t = arr[i]; arr[i] = arr[j]; arr[j] = t; };
+  const toggleAdv = (id) => setAdv((a) => ({ ...a, [id]: !a[id] }));
 
   const restOpts = [["auto", null], ["60", 60], ["90", 90], ["120", 120], ["150", 150]];
   const restAfterOpts = [["auto", null], ["30", 30], ["45", 45], ["60", 60], ["90", 90]];
+  const headInput = { fontFamily: DISPLAY, fontSize: 20, color: C.text, textTransform: "uppercase", letterSpacing: 0.8, paddingVertical: 4, flex: 1 };
 
   return (
     <ScrollView contentContainerStyle={{ padding: 16 }} keyboardShouldPersistTaps="handled">
-      <Pressable onPress={onCancel} style={[S.row, { gap: 4, marginBottom: 12 }]}><Icon name="arrow-left" size={16} color={C.accent} /><Text style={S.link}>Volver</Text></Pressable>
+      <Pressable onPress={onCancel} style={[S.row, { gap: 4, marginBottom: 16 }]}><Icon name="arrow-left" size={16} color={C.accent} /><Text style={S.link}>Volver</Text></Pressable>
       <Text style={S.label}>Nombre de la rutina</Text>
       <TextInput style={S.input} value={r.name} placeholder="Ej. Full Body 3 días" placeholderTextColor={C.muted} onChangeText={(t) => set((n) => (n.name = t))} />
 
       {r.days.map((day, di) => (
-        <View key={day.id} style={[S.card, { marginTop: 14 }]}>
-          <View style={[S.row, { gap: 10 }]}>
-            <TextInput style={[S.input, { flex: 1 }]} value={day.name} placeholder="Nombre del día" placeholderTextColor={C.muted} onChangeText={(t) => set((n) => (n.days[di].name = t))} />
-            <Pressable style={S.iconBtn} onPress={() => set((n) => n.days.splice(di, 1))}><Icon name="trash-2" size={15} color={C.muted} /></Pressable>
+        <View key={day.id} style={{ marginTop: 28 }}>
+          {/* Cabecera del día — sin caja, título + hairline */}
+          <View style={[S.row, { gap: 10, borderBottomWidth: 2, borderColor: C.accent, paddingBottom: 8 }]}>
+            <TextInput style={headInput} value={day.name} placeholder="NOMBRE DEL DÍA" placeholderTextColor={C.muted} onChangeText={(t) => set((n) => (n.days[di].name = t))} />
+            <Pressable onPress={() => set((n) => n.days.splice(di, 1))}><Icon name="trash-2" size={16} color={C.muted} /></Pressable>
           </View>
 
           {day.exercises.map((item, ei) => (
-            <View key={item.id} style={{ marginTop: 10, padding: 10, backgroundColor: C.surface2, borderRadius: 10 }}>
-              <View style={[S.row, { gap: 6 }]}>
-                <Pressable onPress={() => setPicker({ di, ei })} style={[S.between, { flex: 1, backgroundColor: C.surface, borderWidth: 1, borderColor: C.line, borderRadius: 10, paddingVertical: 11, paddingHorizontal: 12 }]}>
-                  <Text style={{ color: item.exerciseId ? C.text : C.muted }}>{item.exerciseId ? exName(dataRef, item.exerciseId) : "Elegir ejercicio…"}</Text>
-                  <Icon name="chevron-right" size={16} color={C.muted} />
+            <View key={item.id} style={{ borderBottomWidth: 1, borderColor: C.line, paddingVertical: 14 }}>
+              {/* Fila principal: índice + selector + reordenar/borrar */}
+              <View style={[S.row, { gap: 10 }]}>
+                <Text style={{ fontFamily: DISPLAY, fontSize: 20, color: C.muted, width: 30 }}>{String(ei + 1).padStart(2, "0")}</Text>
+                <Pressable onPress={() => setPicker({ di, ei })} style={{ flex: 1 }}>
+                  <Text style={{ color: item.exerciseId ? C.text : C.muted, fontWeight: "700", fontSize: 15 }} numberOfLines={1}>
+                    {item.exerciseId ? exName(dataRef, item.exerciseId) : "Elegir ejercicio…"}
+                  </Text>
                 </Pressable>
-                <Pressable style={S.iconBtn} onPress={() => set((n) => move(n.days[di].exercises, ei, -1))}><Icon name="chevron-up" size={15} color={C.muted} /></Pressable>
-                <Pressable style={S.iconBtn} onPress={() => set((n) => move(n.days[di].exercises, ei, 1))}><Icon name="chevron-down" size={15} color={C.muted} /></Pressable>
-                <Pressable style={S.iconBtn} onPress={() => set((n) => n.days[di].exercises.splice(ei, 1))}><Icon name="x" size={15} color={C.muted} /></Pressable>
+                <Pressable onPress={() => set((n) => move(n.days[di].exercises, ei, -1))} hitSlop={6}><Icon name="chevron-up" size={17} color={C.muted} /></Pressable>
+                <Pressable onPress={() => set((n) => move(n.days[di].exercises, ei, 1))} hitSlop={6}><Icon name="chevron-down" size={17} color={C.muted} /></Pressable>
+                <Pressable onPress={() => set((n) => n.days[di].exercises.splice(ei, 1))} hitSlop={6}><Icon name="x" size={17} color={C.muted} /></Pressable>
               </View>
-              <View style={[S.row, { marginTop: 8, gap: 8 }]}>
-                <View style={{ flex: 1 }}><Text style={[S.sub, { marginBottom: 4 }]}>Series</Text><Stepper value={item.sets} step={1} min={1} onChange={(v) => set((n) => (n.days[di].exercises[ei].sets = v))} /></View>
-                <View style={{ flex: 1.3 }}><Text style={[S.sub, { marginBottom: 4 }]}>Reps</Text>
+
+              {/* Controles principales */}
+              <View style={[S.row, { marginTop: 12, gap: 8, paddingLeft: 40 }]}>
+                <View style={{ flex: 1 }}><Text style={[S.sub, { marginBottom: 4, fontSize: 11 }]}>SERIES</Text><Stepper value={item.sets} step={1} min={1} onChange={(v) => set((n) => (n.days[di].exercises[ei].sets = v))} /></View>
+                <View style={{ flex: 1.3 }}><Text style={[S.sub, { marginBottom: 4, fontSize: 11 }]}>REPS</Text>
                   <TextInput style={[S.input, { textAlign: "center", paddingVertical: 9 }]} value={String(item.reps)} placeholder="8-10" placeholderTextColor={C.muted} onChangeText={(t) => set((n) => (n.days[di].exercises[ei].reps = t))} /></View>
-                <View style={{ flex: 1 }}><Text style={[S.sub, { marginBottom: 4 }]}>Peso {unit}</Text><Stepper value={item.weight} step={2.5} onChange={(v) => set((n) => (n.days[di].exercises[ei].weight = v))} /></View>
+                <View style={{ flex: 1 }}><Text style={[S.sub, { marginBottom: 4, fontSize: 11 }]}>PESO {unit}</Text><Stepper value={item.weight} step={2.5} onChange={(v) => set((n) => (n.days[di].exercises[ei].weight = v))} /></View>
               </View>
-              <TextInput style={[S.input, { marginTop: 8, fontSize: 13 }]} value={item.note || ""} placeholder="Nota (ej. Busca 75 kg, RPE 9…)" placeholderTextColor={C.muted} onChangeText={(t) => set((n) => (n.days[di].exercises[ei].note = t))} />
-              <View style={[S.between, { marginTop: 8 }]}>
-                <Text style={S.sub}>Peso por mano/pierna (c/u)</Text>
-                <Pressable onPress={() => set((n) => (n.days[di].exercises[ei].perSide = !n.days[di].exercises[ei].perSide))} style={[S.pillBtn, item.perSide && S.pillBtnOn]}>
-                  <Text style={item.perSide ? S.pillTextOn : S.pillText}>{item.perSide ? "c/u sí" : "c/u no"}</Text>
-                </Pressable>
-              </View>
-              <Text style={[S.sub, { marginTop: 8, marginBottom: 4 }]}>Descanso entre series</Text>
-              <View style={[S.row, { flexWrap: "wrap", gap: 6 }]}>
-                {restOpts.map(([lbl, val]) => (
-                  <Pressable key={lbl} onPress={() => set((n) => (n.days[di].exercises[ei].rest = val))} style={[S.pillBtn, (item.rest ?? null) === val && S.pillBtnOn]}>
-                    <Text style={(item.rest ?? null) === val ? S.pillTextOn : S.pillText}>{lbl === "auto" ? "auto" : lbl + "s"}</Text>
-                  </Pressable>
-                ))}
-              </View>
-              <Text style={[S.sub, { marginTop: 8, marginBottom: 4 }]}>Descanso al cambiar de ejercicio</Text>
-              <View style={[S.row, { flexWrap: "wrap", gap: 6 }]}>
-                {restAfterOpts.map(([lbl, val]) => (
-                  <Pressable key={lbl} onPress={() => set((n) => (n.days[di].exercises[ei].restAfter = val))} style={[S.pillBtn, (item.restAfter ?? null) === val && S.pillBtnOn]}>
-                    <Text style={(item.restAfter ?? null) === val ? S.pillTextOn : S.pillText}>{lbl === "auto" ? "auto" : lbl + "s"}</Text>
-                  </Pressable>
-                ))}
-              </View>
+
+              {/* Toggle opciones avanzadas */}
+              <Pressable onPress={() => toggleAdv(item.id)} style={{ marginTop: 10, paddingLeft: 40 }}>
+                <Text style={[S.sub, { color: C.accent, fontSize: 12 }]}>
+                  {adv[item.id] ? "– ocultar opciones" : "+ opciones (nota · descanso · c/u)"}
+                </Text>
+              </Pressable>
+
+              {adv[item.id] && (
+                <View style={{ marginTop: 10, paddingLeft: 40 }}>
+                  <TextInput style={[S.input, { fontSize: 13 }]} value={item.note || ""} placeholder="Nota (ej. Busca 75 kg, RPE 9…)" placeholderTextColor={C.muted} onChangeText={(t) => set((n) => (n.days[di].exercises[ei].note = t))} />
+                  <View style={[S.between, { marginTop: 10 }]}>
+                    <Text style={S.sub}>Peso por mano/pierna (c/u)</Text>
+                    <Pressable onPress={() => set((n) => (n.days[di].exercises[ei].perSide = !n.days[di].exercises[ei].perSide))} style={[S.pillBtn, item.perSide && S.pillBtnOn]}>
+                      <Text style={item.perSide ? S.pillTextOn : S.pillText}>{item.perSide ? "c/u sí" : "c/u no"}</Text>
+                    </Pressable>
+                  </View>
+                  <Text style={[S.sub, { marginTop: 10, marginBottom: 6, fontSize: 11 }]}>DESCANSO ENTRE SERIES</Text>
+                  <View style={[S.row, { flexWrap: "wrap", gap: 6 }]}>
+                    {restOpts.map(([lbl, val]) => (
+                      <Pressable key={lbl} onPress={() => set((n) => (n.days[di].exercises[ei].rest = val))} style={[S.pillBtn, (item.rest ?? null) === val && S.pillBtnOn]}>
+                        <Text style={(item.rest ?? null) === val ? S.pillTextOn : S.pillText}>{lbl === "auto" ? "auto" : lbl + "s"}</Text>
+                      </Pressable>
+                    ))}
+                  </View>
+                  <Text style={[S.sub, { marginTop: 10, marginBottom: 6, fontSize: 11 }]}>DESCANSO AL CAMBIAR DE EJERCICIO</Text>
+                  <View style={[S.row, { flexWrap: "wrap", gap: 6 }]}>
+                    {restAfterOpts.map(([lbl, val]) => (
+                      <Pressable key={lbl} onPress={() => set((n) => (n.days[di].exercises[ei].restAfter = val))} style={[S.pillBtn, (item.restAfter ?? null) === val && S.pillBtnOn]}>
+                        <Text style={(item.restAfter ?? null) === val ? S.pillTextOn : S.pillText}>{lbl === "auto" ? "auto" : lbl + "s"}</Text>
+                      </Pressable>
+                    ))}
+                  </View>
+                </View>
+              )}
             </View>
           ))}
           <Pressable onPress={() => set((n) => n.days[di].exercises.push({ id: uid(), exerciseId: null, sets: 3, reps: "8-10", weight: 20, note: "", rest: null, restAfter: null, perSide: false }))}>
-            <Text style={[S.link, { marginTop: 10 }]}>+ añadir ejercicio</Text>
+            <Text style={[S.link, { marginTop: 14 }]}>+ añadir ejercicio</Text>
           </Pressable>
         </View>
       ))}
 
-      <Pressable style={[S.btn, S.btnGhost, { marginTop: 14 }]} onPress={() => set((n) => n.days.push({ id: uid(), name: "Día " + (n.days.length + 1), exercises: [] }))}>
+      <Pressable style={[S.btn, S.btnGhost, { marginTop: 24 }]} onPress={() => set((n) => n.days.push({ id: uid(), name: "Día " + (n.days.length + 1), exercises: [] }))}>
         <Icon name="plus" size={16} color={C.text} /><Text style={S.btnTextGhost}>Añadir día</Text>
       </Pressable>
       <Pressable style={[S.btn, { marginTop: 10 }]} onPress={() => onSave(r)}><Icon name="save" size={16} /><Text style={S.btnText}>Guardar rutina</Text></Pressable>

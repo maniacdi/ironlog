@@ -94,7 +94,7 @@ export default function ProgressScreen({ data, unit }) {
 
   return (
     <ScrollView contentContainerStyle={{ padding: 16 }}>
-      <View style={[S.card, { borderColor: statusColor }]}>
+      <View style={[S.card, { borderLeftWidth: 3, borderLeftColor: statusColor }]}>
         <View style={S.between}>
           <Text style={S.label}>Valoración (últimas 2 semanas)</Text>
           <Text style={[S.disp, { color: statusColor }]}>{status}</Text>
