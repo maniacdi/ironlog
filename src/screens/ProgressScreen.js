@@ -77,6 +77,18 @@ export default function ProgressScreen({ data, unit }) {
   const musArr = Object.entries(musVol).filter(([, v]) => v > 0).sort((a, b) => b[1] - a[1]);
   const maxMus = Math.max(1, ...musArr.map(([, v]) => v));
 
+  // Series efectivas por músculo esta semana (métrica clásica de hipertrofia)
+  const setsMus = {};
+  data.logs.filter((l) => daysAgo(l.date) < 7).forEach((l) => l.entries.forEach((e) => {
+    if (e.skipped) return;
+    const m = exMuscle(data, e.exerciseId) || "Otro";
+    const done = e.sets.filter((s) => s.done && !s.skipped).length;
+    if (done) setsMus[m] = (setsMus[m] || 0) + done;
+  }));
+  const setsArr = Object.entries(setsMus).sort((a, b) => b[1] - a[1]);
+  const setsColor = (v) => (v < 10 ? C.blue : v <= 20 ? C.positive : C.accent);
+  const setsTag = (v) => (v < 10 ? "bajo" : v <= 20 ? "óptimo" : "alto");
+
   const trendColor = (t) => (t === "sube" ? C.positive : t === "baja" ? C.negative : t === "estable" ? C.blue : C.muted);
   const trendIcon = (t) => (t === "sube" ? "chevron-up" : t === "baja" ? "chevron-down" : "minus");
 
@@ -143,6 +155,27 @@ export default function ProgressScreen({ data, unit }) {
             </View>
           ))}
           <Text style={[S.sub, { marginTop: 10 }]}>Solo cuenta ejercicios con carga; el trabajo a peso corporal no suma volumen.</Text>
+        </View>
+      )}
+
+      {setsArr.length > 0 && (
+        <View style={S.card}>
+          <Text style={S.label}>Series por músculo (esta semana)</Text>
+          {setsArr.map(([m, v]) => (
+            <View key={m} style={{ marginTop: 10 }}>
+              <View style={[S.between, { marginBottom: 4 }]}>
+                <Text style={{ color: C.text, fontSize: 13 }}>{m}</Text>
+                <View style={[S.row, { gap: 6 }]}>
+                  <Text style={{ color: setsColor(v), fontWeight: "700", fontSize: 13 }}>{v} series</Text>
+                  <Text style={[S.sub, { fontSize: 11, color: setsColor(v) }]}>{setsTag(v)}</Text>
+                </View>
+              </View>
+              <View style={{ height: 8, backgroundColor: C.surface2, borderRadius: 4, overflow: "hidden" }}>
+                <View style={{ height: "100%", width: `${Math.min(100, (v / 20) * 100)}%`, backgroundColor: setsColor(v), borderRadius: 4 }} />
+              </View>
+            </View>
+          ))}
+          <Text style={[S.sub, { marginTop: 10 }]}>Referencia habitual para hipertrofia: 10-20 series semanales por grupo. Cuenta solo series completadas.</Text>
         </View>
       )}
       <View style={{ height: 20 }} />

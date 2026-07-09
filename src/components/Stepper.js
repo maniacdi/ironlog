@@ -1,7 +1,7 @@
 import React from 'react';
 import { View, TextInput, Pressable } from 'react-native';
 import { Icon } from './Icon';
-import { C } from '../theme';
+import { C, MONO } from '../theme';
 
 export function Stepper({
   value,
@@ -42,11 +42,13 @@ export function Stepper({
           onChange(isNaN(v) ? 0 : v);
         }}
         style={{
-          width: 46,
+          width: 50,
           textAlign: 'center',
           color: C.text,
           fontSize: 16,
           fontWeight: '700',
+          fontFamily: MONO,
+          fontVariant: ['tabular-nums'],
           padding: 0,
         }}
       />

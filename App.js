@@ -16,6 +16,11 @@ import { C, S } from './src/theme';
 import { loadData, saveData } from './src/storage';
 import { migrate, seed } from './src/dataModel';
 import { mmss } from './src/helpers';
+import {
+  scheduleRestDone,
+  cancelRest,
+  initNotifChannel,
+} from './src/notifications';
 import TodayScreen from './src/screens/TodayScreen';
 import RoutinesScreen from './src/screens/RoutinesScreen';
 import ExercisesScreen from './src/screens/ExercisesScreen';
@@ -57,6 +62,7 @@ function AppInner() {
   // Temporizador en background: guardamos timestamp de inicio + duración total
   const restStartedAt = useRef(null);
   const restDuration = useRef(0);
+  const restNotifId = useRef(null);
   const appState = useRef(AppState.currentState);
 
   useEffect(() => {
@@ -65,6 +71,7 @@ function AppInner() {
       setData(d ? migrate(d) : seed());
       loaded.current = true;
     })();
+    initNotifChannel();
   }, []);
 
   useEffect(() => {
@@ -83,6 +90,7 @@ function AppInner() {
       const remaining = restDuration.current - elapsed;
       if (remaining <= 0) {
         setRest(0);
+        restNotifId.current = null;
         clearInterval(t);
       } else {
         setRest(remaining);
@@ -141,10 +149,17 @@ function AppInner() {
     restStartedAt.current = Date.now();
     setRest(duration);
     setRestLabel(label || 'Descanso');
+    // Notificación local por si el usuario bloquea/sale de la app
+    cancelRest(restNotifId.current);
+    (async () => {
+      restNotifId.current = await scheduleRestDone(duration, label);
+    })();
   };
   const stopRest = () => {
     setRest(0);
     restStartedAt.current = null;
+    cancelRest(restNotifId.current);
+    restNotifId.current = null;
   };
 
   return (
@@ -225,7 +240,14 @@ function AppInner() {
             style={S.iconBtn}
             onPress={() => {
               restDuration.current += 15;
-              setRest((r) => r + 15);
+              setRest((r) => {
+                const next = r + 15;
+                cancelRest(restNotifId.current);
+                (async () => {
+                  restNotifId.current = await scheduleRestDone(next, restLabel);
+                })();
+                return next;
+              });
             }}
           >
             <Icon name='plus' size={15} color={C.muted} />

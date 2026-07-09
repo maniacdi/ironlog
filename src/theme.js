@@ -1,18 +1,25 @@
-import { StyleSheet } from 'react-native';
+import { Platform, StyleSheet } from 'react-native';
 
 export const C = {
-  bg: '#0E0F12',
-  surface: '#16181D',
-  surface2: '#1E2128',
-  line: '#2A2E37',
-  text: '#ECEDEF',
-  muted: '#8A8F9A',
+  bg: '#0B0C0E',
+  surface: '#131518',
+  surface2: '#1B1E23',
+  line: '#24282F',
+  text: '#F3F4F6',
+  muted: '#767C86',
   accent: '#FF5A1F',
-  positive: '#3DD68C',
+  positive: '#34D399',
   blue: '#5B9BD5',
-  negative: '#E5484D',
+  negative: '#F0413F',
   skipped: '#6B5E3A',
 };
+
+// Fuente monoespaciada: los números se leen como un display de gimnasio.
+export const MONO = Platform.select({
+  ios: 'Menlo',
+  android: 'monospace',
+  default: 'monospace',
+});
 
 export const S = StyleSheet.create({
   // Layout
@@ -22,50 +29,68 @@ export const S = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
   },
-  // Cards — más sutiles, sin borde tan marcado
+  // Cards — borde hairline para bordes definidos, sin relleno pesado
   card: {
     backgroundColor: C.surface,
     borderRadius: 12,
-    padding: 14,
+    borderWidth: 1,
+    borderColor: C.line,
+    padding: 15,
     marginBottom: 10,
   },
   // Tipografía
   title: {
     color: C.text,
-    fontSize: 24,
+    fontSize: 23,
     fontWeight: '800',
     textTransform: 'uppercase',
-    letterSpacing: 0.5,
+    letterSpacing: 1.5,
   },
   disp: {
     color: C.text,
     fontWeight: '800',
     textTransform: 'uppercase',
-    letterSpacing: 0.5,
+    letterSpacing: 1,
   },
-  sub: { color: C.muted, fontSize: 13 },
+  sub: { color: C.muted, fontSize: 13, letterSpacing: 0.2 },
   label: {
     color: C.muted,
     fontSize: 11,
     textTransform: 'uppercase',
-    letterSpacing: 0.6,
+    letterSpacing: 1.2,
     fontWeight: '700',
-    marginBottom: 6,
+    marginBottom: 8,
   },
   // Botones
   btn: {
     backgroundColor: C.accent,
     borderRadius: 11,
-    paddingVertical: 13,
+    paddingVertical: 14,
     paddingHorizontal: 16,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
   },
-  btnGhost: { backgroundColor: C.surface2 },
-  btnText: { color: '#fff', fontWeight: '700', fontSize: 14 },
-  btnTextGhost: { color: C.text, fontWeight: '700', fontSize: 14 },
+  btnGhost: {
+    backgroundColor: 'transparent',
+    borderWidth: 1,
+    borderColor: C.line,
+  },
+  btnText: {
+    color: '#fff',
+    fontWeight: '800',
+    fontSize: 14,
+    textTransform: 'uppercase',
+    letterSpacing: 1,
+  },
+  btnTextGhost: {
+    color: C.text,
+    fontWeight: '800',
+    fontSize: 14,
+    textTransform: 'uppercase',
+    letterSpacing: 1,
+  },
   // Inputs
   input: {
     backgroundColor: C.surface2,
@@ -97,11 +122,22 @@ export const S = StyleSheet.create({
   stat: {
     backgroundColor: C.surface2,
     borderRadius: 12,
-    padding: 14,
+    borderWidth: 1,
+    borderColor: C.line,
+    paddingVertical: 14,
+    paddingHorizontal: 12,
     flex: 1,
     alignItems: 'center',
   },
-  bignum: { color: C.text, fontSize: 30, fontWeight: '800' },
+  // Números tipo instrumento: monoespaciada + dígitos tabulares
+  bignum: {
+    color: C.text,
+    fontSize: 30,
+    fontWeight: '800',
+    fontFamily: MONO,
+    fontVariant: ['tabular-nums'],
+    letterSpacing: -1,
+  },
   // Pills
   pillBtn: {
     backgroundColor: C.surface2,
@@ -111,6 +147,6 @@ export const S = StyleSheet.create({
   },
   pillBtnOn: { backgroundColor: C.accent },
   pillText: { color: C.muted, fontSize: 13, fontWeight: '600' },
-  pillTextOn: { color: '#fff', fontSize: 13, fontWeight: '600' },
+  pillTextOn: { color: '#fff', fontSize: 13, fontWeight: '700' },
   link: { color: C.accent, fontWeight: '700', fontSize: 13 },
 });

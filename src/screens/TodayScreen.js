@@ -10,8 +10,10 @@ import {
   PanResponder,
   Animated,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Icon } from '../components/Icon';
 import { Stepper } from '../components/Stepper';
+import { LineChart } from '../components/Charts';
 import { C, S } from '../theme';
 import {
   uid,
@@ -30,6 +32,8 @@ import {
   hasHealthPermissions,
   requestHealthPermissions,
   readSessionHealthData,
+  runHealthDiagnostic,
+  getHealthLog,
 } from '../healthConnect';
 
 function SwipeRow({ onDelete, onSkip, children }) {
@@ -80,11 +84,62 @@ export default function TodayScreen({
   startRest,
   stopRest,
 }) {
+  const insets = useSafeAreaInsets();
   const [picking, setPicking] = useState(false);
   const [summary, setSummary] = useState(null);
   const [collapsed, setCollapsed] = useState({});
   const [detail, setDetail] = useState(null);
   const [syncing, setSyncing] = useState(false);
+  const [prBanner, setPrBanner] = useState(null);
+
+  // Aplica datos health a un log (y al detalle abierto si coincide)
+  const applyHealth = (logId, health) => {
+    setData((d) => ({
+      ...d,
+      logs: d.logs.map((l) => (l.id === logId ? { ...l, health } : l)),
+    }));
+    setDetail((prev) =>
+      prev && prev.id === logId ? { ...prev, health } : prev,
+    );
+  };
+
+  // Lee Health Connect y enriquece el log. Devuelve true si obtuvo datos.
+  const enrichLog = async (logId, startMs, endMs, { requestPerms = false } = {}) => {
+    try {
+      const ok = await initHealthConnect();
+      if (!ok) return false;
+      let granted = await hasHealthPermissions();
+      if (!granted && requestPerms) {
+        await requestHealthPermissions();
+        granted = await hasHealthPermissions();
+      }
+      if (!granted) return false;
+      const health = await readSessionHealthData(startMs, endMs);
+      if (health) {
+        applyHealth(logId, health);
+        return true;
+      }
+      return false;
+    } catch {
+      return false;
+    }
+  };
+
+  // Abre el detalle e intenta sincronizar en silencio si falta health
+  const openDetail = (l) => {
+    setDetail(l);
+    if (!l.health) {
+      const startMs = new Date(l.date + 'T00:00:00').getTime();
+      const endMs = new Date(l.date + 'T23:59:59').getTime();
+      enrichLog(l.id, startMs, endMs);
+    }
+  };
+
+  // Muestra brevemente un aviso de récord
+  const flashPR = (name) => {
+    setPrBanner(name);
+    setTimeout(() => setPrBanner((cur) => (cur === name ? null : cur)), 3500);
+  };
 
   const lastWeightFor = (exId) => {
     const logs = data.logs
@@ -257,25 +312,14 @@ export default function TodayScreen({
 
     // Intentamos enriquecer con datos del reloj (Samsung Health vía Health Connect).
     // No bloquea el guardado: si falla o no hay permisos, el log se queda sin 'health'.
+    // Samsung Health sube a Health Connect con retraso, así que reintentamos.
     if (startedAt) {
-      try {
-        const ok = await initHealthConnect();
-        if (ok) {
-          const granted = await hasHealthPermissions();
-          if (granted) {
-            const health = await readSessionHealthData(startedAt, endedAt);
-            if (health) {
-              setData((d) => ({
-                ...d,
-                logs: d.logs.map((l) =>
-                  l.id === logId ? { ...l, health } : l,
-                ),
-              }));
-            }
-          }
-        }
-      } catch {
-        // silencioso: la sesión ya está guardada igualmente
+      const attempt = () =>
+        enrichLog(logId, startedAt, endedAt, { requestPerms: true });
+      const ok = await attempt();
+      if (!ok) {
+        setTimeout(attempt, 45000); // ~45 s
+        setTimeout(attempt, 180000); // ~3 min
       }
     }
   };
@@ -364,6 +408,31 @@ export default function TodayScreen({
     const skippedExs = session.entries.filter((e) => e.skipped).length;
 
     return (
+      <View style={{ flex: 1 }}>
+      {prBanner && (
+        <View
+          style={{
+            position: 'absolute',
+            top: 12,
+            left: 16,
+            right: 16,
+            zIndex: 10,
+            flexDirection: 'row',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: 8,
+            backgroundColor: C.accent,
+            borderRadius: 999,
+            paddingVertical: 10,
+            paddingHorizontal: 16,
+          }}
+        >
+          <Icon name='flame' size={16} color='#fff' />
+          <Text style={{ color: '#fff', fontWeight: '800', fontSize: 14 }}>
+            ¡Récord en {prBanner}!
+          </Text>
+        </View>
+      )}
       <ScrollView
         contentContainerStyle={{ padding: 16 }}
         keyboardShouldPersistTaps='handled'
@@ -660,6 +729,11 @@ export default function TodayScreen({
                           onPress={() => {
                             if (s.skipped) return;
                             const willDo = !s.done;
+                            if (willDo) {
+                              const est = e1rm(s.weight, s.reps);
+                              if (est > (ex.prevBest || 0) + 0.01)
+                                flashPR(exName(data, ex.exerciseId));
+                            }
                             mut((n) => {
                               n.entries[ei].sets[si].done = willDo;
                               if (willDo) {
@@ -793,6 +867,7 @@ export default function TodayScreen({
         </Pressable>
         <View style={{ height: 20 }} />
       </ScrollView>
+      </View>
     );
   }
 
@@ -846,7 +921,7 @@ export default function TodayScreen({
         return (
           <Pressable
             key={l.id}
-            onPress={() => setDetail(l)}
+            onPress={() => openDetail(l)}
             style={{
               flexDirection: 'row',
               alignItems: 'center',
@@ -994,7 +1069,9 @@ export default function TodayScreen({
               style={{
                 flexDirection: 'row',
                 alignItems: 'center',
-                padding: 16,
+                paddingHorizontal: 16,
+                paddingTop: insets.top + 14,
+                paddingBottom: 14,
                 borderBottomWidth: 1,
                 borderColor: C.line,
                 backgroundColor: C.surface,
@@ -1012,7 +1089,12 @@ export default function TodayScreen({
               </View>
             </View>
 
-            <ScrollView contentContainerStyle={{ padding: 16 }}>
+            <ScrollView
+              contentContainerStyle={{
+                padding: 16,
+                paddingBottom: insets.bottom + 24,
+              }}
+            >
               {/* Stats generales */}
               <View style={[S.row, { gap: 10, flexWrap: 'wrap' }]}>
                 <View style={S.stat}>
@@ -1078,6 +1160,63 @@ export default function TodayScreen({
                 )}
               </View>
 
+              {/* Gráfica de FC durante la sesión */}
+              {!!detail.health?.hrSeries && detail.health.hrSeries.length > 1 && (
+                <View style={[S.card, { marginTop: 12 }]}>
+                  <View style={[S.between, { marginBottom: 4 }]}>
+                    <Text style={S.label}>Frecuencia cardíaca</Text>
+                    <View style={[S.row, { gap: 8 }]}>
+                      {!!detail.health.minHr && (
+                        <Text style={S.sub}>mín {detail.health.minHr}</Text>
+                      )}
+                      {!!detail.health.maxHr && (
+                        <Text style={[S.sub, { color: C.negative }]}>
+                          máx {detail.health.maxHr}
+                        </Text>
+                      )}
+                    </View>
+                  </View>
+                  <LineChart
+                    height={140}
+                    data={detail.health.hrSeries.map((bpm) => ({
+                      label: '',
+                      bpm,
+                    }))}
+                    series={[{ key: 'bpm', color: C.negative, width: 2 }]}
+                  />
+                </View>
+              )}
+
+              {/* Re-sincronizar aunque ya haya datos */}
+              {!!detail.health && (
+                <Pressable
+                  style={{ marginTop: 10, alignSelf: 'flex-end' }}
+                  disabled={syncing}
+                  onPress={async () => {
+                    setSyncing(true);
+                    const startMs = new Date(
+                      detail.date + 'T00:00:00',
+                    ).getTime();
+                    const endMs = new Date(
+                      detail.date + 'T23:59:59',
+                    ).getTime();
+                    const ok = await enrichLog(detail.id, startMs, endMs, {
+                      requestPerms: true,
+                    });
+                    if (!ok)
+                      Alert.alert(
+                        'Sin cambios',
+                        'No se encontraron datos nuevos para ese día.',
+                      );
+                    setSyncing(false);
+                  }}
+                >
+                  <Text style={[S.sub, { color: C.accent, fontSize: 12 }]}>
+                    {syncing ? 'sincronizando…' : '↻ re-sincronizar reloj'}
+                  </Text>
+                </Pressable>
+              )}
+
               {!detail.health && (
                 <View style={{ marginTop: 12 }}>
                   <Text style={[S.sub, { fontSize: 12, marginBottom: 8 }]}>
@@ -1088,16 +1227,20 @@ export default function TodayScreen({
                     disabled={syncing}
                     onPress={async () => {
                       setSyncing(true);
+                      // Ventana del día completo (sesiones sin hora exacta)
+                      const startMs = new Date(
+                        detail.date + 'T00:00:00',
+                      ).getTime();
+                      const endMs = new Date(
+                        detail.date + 'T23:59:59',
+                      ).getTime();
                       try {
                         const ok = await initHealthConnect();
                         if (ok) {
-                          // Para sesiones sin startedAt exacto, buscamos en todo el día
-                          const startMs = new Date(
-                            detail.date + 'T00:00:00',
-                          ).getTime();
-                          const endMs = new Date(
-                            detail.date + 'T23:59:59',
-                          ).getTime();
+                          // Aseguramos permisos ANTES de leer (era el bug: leía sin pedirlos)
+                          const granted = await hasHealthPermissions();
+                          if (!granted) await requestHealthPermissions();
+
                           const health = await readSessionHealthData(
                             startMs,
                             endMs,
@@ -1110,17 +1253,37 @@ export default function TodayScreen({
                               ),
                             }));
                             setDetail((prev) => ({ ...prev, health }));
-                          } else {
-                            Alert.alert(
-                              'Sin datos',
-                              'Samsung Health no tiene registros de FC/kcal para ese rango horario. Asegúrate de que el reloj esté sincronizado.',
-                            );
+                            setSyncing(false);
+                            return;
                           }
                         }
+                        // Sin datos → diagnóstico para saber POR QUÉ
+                        const report = await runHealthDiagnostic(
+                          startMs,
+                          endMs,
+                        );
+                        const body = report.steps
+                          .map((s) => `• ${s.label}: ${s.value}`)
+                          .join('\n');
+                        Alert.alert(
+                          report.ok ? 'Diagnóstico' : 'Sin datos — diagnóstico',
+                          body,
+                          [
+                            {
+                              text: 'Ver logs',
+                              onPress: () =>
+                                Alert.alert('Logs Health Connect', getHealthLog()),
+                            },
+                            { text: 'OK' },
+                          ],
+                        );
                       } catch (e) {
                         Alert.alert(
                           'Error',
-                          'No se pudo conectar con Health Connect.',
+                          'No se pudo conectar con Health Connect.\n\n' +
+                            String(e?.message || e) +
+                            '\n\n' +
+                            getHealthLog(),
                         );
                       }
                       setSyncing(false);

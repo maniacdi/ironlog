@@ -9,6 +9,7 @@ import {
   uid,
   norm,
   mmss,
+  todayISO,
   exName,
   exMuscle,
   parseCSV,
@@ -16,7 +17,12 @@ import {
   sessionToMarkdown,
   sessionsToJSON,
 } from '../helpers';
-import { seed } from '../dataModel';
+import { seed, migrate } from '../dataModel';
+import {
+  runHealthDiagnostic,
+  getHealthLog,
+  openHealthConnectSettings,
+} from '../healthConnect';
 
 export default function DataScreen({ data, setData }) {
   const [msg, setMsg] = useState(null);
@@ -130,6 +136,40 @@ export default function DataScreen({ data, setData }) {
     writeAndShare('progreso.json', JSON.stringify(out, null, 2));
   };
 
+  // ── Copia de seguridad completa ───────────────────────────────
+  const exportBackup = () => {
+    const out = {
+      _ironlogBackup: true,
+      exportado: new Date().toISOString(),
+      data,
+    };
+    writeAndShare('ironlog-backup.json', JSON.stringify(out, null, 2));
+  };
+
+  // ── Health Connect ────────────────────────────────────────────
+  const checkHealthConnect = async () => {
+    const startMs = new Date(todayISO() + 'T00:00:00').getTime();
+    const endMs = new Date(todayISO() + 'T23:59:59').getTime();
+    setMsg({ ok: true, t: 'Comprobando Health Connect…' });
+    try {
+      const report = await runHealthDiagnostic(startMs, endMs);
+      const body = report.steps.map((s) => `• ${s.label}: ${s.value}`).join('\n');
+      Alert.alert(
+        report.ok ? 'Health Connect OK' : 'Health Connect — diagnóstico',
+        body,
+        [
+          { text: 'Abrir ajustes', onPress: () => openHealthConnectSettings() },
+          { text: 'Ver logs', onPress: () => Alert.alert('Logs Health Connect', getHealthLog() || 'sin logs') },
+          { text: 'OK' },
+        ],
+      );
+      setMsg(null);
+    } catch (e) {
+      Alert.alert('Error', String(e?.message || e));
+      setMsg(null);
+    }
+  };
+
   // ── Import ────────────────────────────────────────────────────
   const buildFromRows = (rows) => {
     const lib = [...data.exercises];
@@ -208,6 +248,29 @@ export default function DataScreen({ data, setData }) {
         text.trim().startsWith('[')
       ) {
         const p = JSON.parse(text);
+        // ¿Es una copia de seguridad completa? → restaurar todo
+        const backup = p && p._ironlogBackup && p.data ? p.data : null;
+        const looksFull =
+          backup ||
+          (p && p.logs && p.exercises && p.settings ? p : null);
+        if (looksFull) {
+          Alert.alert(
+            'Restaurar copia',
+            'Esto REEMPLAZARÁ todos tus datos actuales (rutinas, ejercicios, historial y ajustes) por los de la copia. ¿Continuar?',
+            [
+              { text: 'Cancelar' },
+              {
+                text: 'Restaurar',
+                style: 'destructive',
+                onPress: () => {
+                  setData(migrate(looksFull));
+                  setMsg({ ok: true, t: 'Copia restaurada.' });
+                },
+              },
+            ],
+          );
+          return;
+        }
         const rs = Array.isArray(p) ? p : p.routines;
         rows = [];
         rs.forEach((r) =>
@@ -326,6 +389,38 @@ export default function DataScreen({ data, setData }) {
           label='Progreso → Markdown (.md)'
         />
         <Row onPress={exportProgressJSON} icon='code' label='Progreso → JSON' />
+      </View>
+
+      {/* Copia de seguridad */}
+      <Text style={S.label}>Copia de seguridad</Text>
+      <Text style={[S.sub, { marginBottom: 10 }]}>
+        Guarda o restaura TODO (rutinas, ejercicios, historial y ajustes) en un
+        único archivo. Para importarla, súbela arriba con "Subir CSV / JSON".
+      </Text>
+      <View style={{ marginBottom: 20 }}>
+        <Row
+          onPress={exportBackup}
+          icon='save'
+          label='Exportar copia completa (.json)'
+        />
+      </View>
+
+      {/* Health Connect */}
+      <Text style={S.label}>Reloj / Health Connect</Text>
+      <Text style={[S.sub, { marginBottom: 10 }]}>
+        Comprueba por qué no se sincronizan los datos de Samsung Health.
+      </Text>
+      <View style={{ marginBottom: 20 }}>
+        <Row
+          onPress={checkHealthConnect}
+          icon='activity'
+          label='Comprobar Health Connect'
+        />
+        <Row
+          onPress={() => openHealthConnectSettings()}
+          icon='settings'
+          label='Abrir ajustes de Health Connect'
+        />
       </View>
 
       {/* Ajustes */}
