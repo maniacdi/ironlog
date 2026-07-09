@@ -1,4 +1,4 @@
-import { Platform, StyleSheet } from 'react-native';
+import { StyleSheet } from 'react-native';
 
 export const C = {
   bg: '#0B0C0E',
@@ -14,12 +14,11 @@ export const C = {
   skipped: '#6B5E3A',
 };
 
-// Fuente monoespaciada: los números se leen como un display de gimnasio.
-export const MONO = Platform.select({
-  ios: 'Menlo',
-  android: 'monospace',
-  default: 'monospace',
-});
+// Display condensada pesada (títulos) — carácter atlético/brutal.
+export const DISPLAY = 'Anton_400Regular';
+// Monoespaciada técnica: los números se leen como un display de gimnasio.
+export const MONO = 'IBMPlexMono_500Medium';
+export const MONO_BOLD = 'IBMPlexMono_700Bold';
 
 export const S = StyleSheet.create({
   // Layout
@@ -41,16 +40,19 @@ export const S = StyleSheet.create({
   // Tipografía
   title: {
     color: C.text,
-    fontSize: 23,
-    fontWeight: '800',
+    fontSize: 26,
+    fontFamily: DISPLAY,
+    fontWeight: '400',
     textTransform: 'uppercase',
     letterSpacing: 1.5,
   },
   disp: {
     color: C.text,
-    fontWeight: '800',
+    fontSize: 20,
+    fontFamily: DISPLAY,
+    fontWeight: '400',
     textTransform: 'uppercase',
-    letterSpacing: 1,
+    letterSpacing: 0.8,
   },
   sub: { color: C.muted, fontSize: 13, letterSpacing: 0.2 },
   label: {
@@ -133,8 +135,8 @@ export const S = StyleSheet.create({
   bignum: {
     color: C.text,
     fontSize: 30,
-    fontWeight: '800',
-    fontFamily: MONO,
+    fontWeight: '400',
+    fontFamily: MONO_BOLD,
     fontVariant: ['tabular-nums'],
     letterSpacing: -1,
   },

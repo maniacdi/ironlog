@@ -11,6 +11,11 @@ import {
   SafeAreaProvider,
   useSafeAreaInsets,
 } from 'react-native-safe-area-context';
+import { useFonts, Anton_400Regular } from '@expo-google-fonts/anton';
+import {
+  IBMPlexMono_500Medium,
+  IBMPlexMono_700Bold,
+} from '@expo-google-fonts/ibm-plex-mono';
 import { Icon } from './src/components/Icon';
 import { C, S } from './src/theme';
 import { loadData, saveData } from './src/storage';
@@ -58,6 +63,12 @@ function AppInner() {
   const [restLabel, setRestLabel] = useState('Descanso');
   const loaded = useRef(false);
   const insets = useSafeAreaInsets();
+  const [fontsLoaded, fontError] = useFonts({
+    Anton_400Regular,
+    IBMPlexMono_500Medium,
+    IBMPlexMono_700Bold,
+  });
+  const fontsReady = fontsLoaded || !!fontError; // si fallan, seguimos con fuente del sistema
 
   // Temporizador en background: guardamos timestamp de inicio + duración total
   const restStartedAt = useRef(null);
@@ -126,7 +137,7 @@ function AppInner() {
     return () => sub.remove();
   }, []);
 
-  if (!data)
+  if (!data || !fontsReady)
     return (
       <View
         style={{
