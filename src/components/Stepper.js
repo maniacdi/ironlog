@@ -15,23 +15,18 @@ export function Stepper({
       style={{
         flexDirection: 'row',
         alignItems: 'center',
-        backgroundColor: C.surface2,
-        borderRadius: 10,
-        overflow: 'hidden',
+        justifyContent: 'center',
+        gap: 4,
         opacity: disabled ? 0.4 : 1,
       }}
     >
       <Pressable
         disabled={disabled}
         onPress={() => onChange(Math.max(min, +(value - step).toFixed(2)))}
-        style={{
-          width: 32,
-          height: 40,
-          alignItems: 'center',
-          justifyContent: 'center',
-        }}
+        hitSlop={8}
+        style={{ width: 28, height: 38, alignItems: 'center', justifyContent: 'center' }}
       >
-        <Icon name='minus' size={15} color={C.text} />
+        <Icon name='minus' size={16} color={C.muted} />
       </Pressable>
       <TextInput
         value={String(value)}
@@ -42,27 +37,26 @@ export function Stepper({
           onChange(isNaN(v) ? 0 : v);
         }}
         style={{
-          width: 50,
+          minWidth: 44,
           textAlign: 'center',
           color: C.text,
-          fontSize: 16,
+          fontSize: 17,
           fontWeight: '700',
           fontFamily: MONO,
           fontVariant: ['tabular-nums'],
-          padding: 0,
+          paddingVertical: 6,
+          paddingHorizontal: 2,
+          borderBottomWidth: 2,
+          borderBottomColor: C.line,
         }}
       />
       <Pressable
         disabled={disabled}
         onPress={() => onChange(+(value + step).toFixed(2))}
-        style={{
-          width: 32,
-          height: 40,
-          alignItems: 'center',
-          justifyContent: 'center',
-        }}
+        hitSlop={8}
+        style={{ width: 28, height: 38, alignItems: 'center', justifyContent: 'center' }}
       >
-        <Icon name='plus' size={15} color={C.text} />
+        <Icon name='plus' size={16} color={C.muted} />
       </Pressable>
     </View>
   );

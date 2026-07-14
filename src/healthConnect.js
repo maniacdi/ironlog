@@ -153,8 +153,29 @@ export async function readSessionHealthData(startMs, endMs) {
   };
   log('leyendo rango', timeRangeFilter.startTime, '→', timeRangeFilter.endTime);
 
+  // Si hay una sesión de ejercicio del reloj, acotamos la FC a SU ventana real
+  // (no todo el bloque con calentamiento/descansos) → media más parecida al reloj.
+  const exRecords = await readType('ExerciseSession', timeRangeFilter);
+  let hrFilter = timeRangeFilter;
+  if (exRecords.length) {
+    const starts = exRecords
+      .map((r) => (r.startTime ? new Date(r.startTime).getTime() : null))
+      .filter((v) => v);
+    const ends = exRecords
+      .map((r) => (r.endTime ? new Date(r.endTime).getTime() : null))
+      .filter((v) => v);
+    if (starts.length && ends.length) {
+      hrFilter = {
+        operator: 'between',
+        startTime: new Date(Math.min(...starts)).toISOString(),
+        endTime: new Date(Math.max(...ends)).toISOString(),
+      };
+      log('FC acotada a sesión de ejercicio', hrFilter.startTime, '→', hrFilter.endTime);
+    }
+  }
+
   const [hrRecords, totalCalRecords, activeCalRecords] = await Promise.all([
-    readType('HeartRate', timeRangeFilter),
+    readType('HeartRate', hrFilter),
     readType('TotalCaloriesBurned', timeRangeFilter),
     readType('ActiveCaloriesBurned', timeRangeFilter),
   ]);
@@ -178,7 +199,7 @@ export async function readSessionHealthData(startMs, endMs) {
   const sMin = bpmValues.length ? Math.min(...bpmValues) : null;
 
   // …y las cruzamos con el agregado nativo de HC, quedándonos con el pico real.
-  const agg = await aggregateHeartRate(timeRangeFilter);
+  const agg = await aggregateHeartRate(hrFilter);
   const avgHr = agg?.avgHr ?? sAvg;
   const maxHr = Math.max(agg?.maxHr ?? 0, sMax ?? 0) || null;
   const minHr =
