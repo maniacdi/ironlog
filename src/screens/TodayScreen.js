@@ -517,7 +517,15 @@ export default function TodayScreen({
           return (
             <View
               key={ex.exerciseId}
-              style={[S.card, allDone && { opacity: 0.75 }]}
+              style={{
+                borderTopWidth: 1,
+                borderColor: C.line,
+                borderLeftWidth: isCollapsed ? 0 : 3,
+                borderLeftColor: allDone ? C.positive : C.accent,
+                paddingLeft: isCollapsed ? 0 : 13,
+                paddingVertical: 14,
+                opacity: allDone ? 0.55 : 1,
+              }}
             >
               {/* Header ejercicio */}
               <Pressable
@@ -535,13 +543,14 @@ export default function TodayScreen({
                     }}
                   >
                     {allDone && (
-                      <Icon name='check-circle' size={14} color={C.positive} />
+                      <Icon name='check-circle' size={15} color={C.positive} />
                     )}
                     <Text
                       style={{
                         color: allDone ? C.positive : C.text,
-                        fontWeight: '700',
-                        fontSize: 15,
+                        fontWeight: '800',
+                        fontSize: 16,
+                        letterSpacing: 0.3,
                       }}
                     >
                       {exName(data, ex.exerciseId)}
@@ -690,7 +699,7 @@ export default function TodayScreen({
                           marginTop: 8,
                           gap: 5,
                           opacity: s.skipped ? 0.35 : 1,
-                          backgroundColor: C.surface,
+                          backgroundColor: C.bg,
                         }}
                       >
                         <Text

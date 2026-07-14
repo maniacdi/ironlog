@@ -31,7 +31,7 @@ export const S = StyleSheet.create({
   // Cards — bloques planos rellenos; separan por contraste, no por borde
   card: {
     backgroundColor: C.surface,
-    borderRadius: 12,
+    borderRadius: 4,
     padding: 15,
     marginBottom: 10,
   },
@@ -64,7 +64,7 @@ export const S = StyleSheet.create({
   // Botones
   btn: {
     backgroundColor: C.accent,
-    borderRadius: 11,
+    borderRadius: 4,
     paddingVertical: 14,
     paddingHorizontal: 16,
     flexDirection: 'row',
@@ -97,7 +97,7 @@ export const S = StyleSheet.create({
     borderWidth: 1,
     borderColor: C.line,
     color: C.text,
-    borderRadius: 10,
+    borderRadius: 4,
     paddingVertical: 11,
     paddingHorizontal: 12,
     fontSize: 14,
@@ -106,14 +106,14 @@ export const S = StyleSheet.create({
     backgroundColor: C.surface2,
     width: 34,
     height: 34,
-    borderRadius: 9,
+    borderRadius: 4,
     alignItems: 'center',
     justifyContent: 'center',
   },
   // Chips
   chip: {
     backgroundColor: 'transparent',
-    borderRadius: 999,
+    borderRadius: 4,
     paddingVertical: 3,
     paddingHorizontal: 8,
   },
@@ -121,9 +121,7 @@ export const S = StyleSheet.create({
   // Stats
   stat: {
     backgroundColor: C.surface2,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: C.line,
+    borderRadius: 4,
     paddingVertical: 14,
     paddingHorizontal: 12,
     flex: 1,
@@ -141,7 +139,7 @@ export const S = StyleSheet.create({
   // Pills
   pillBtn: {
     backgroundColor: C.surface2,
-    borderRadius: 999,
+    borderRadius: 4,
     paddingVertical: 8,
     paddingHorizontal: 14,
   },
