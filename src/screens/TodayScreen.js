@@ -13,6 +13,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Icon } from '../components/Icon';
 import { Stepper } from '../components/Stepper';
+import { ConfirmModal } from '../components/ConfirmModal';
 import { LineChart } from '../components/Charts';
 import { C, S } from '../theme';
 import {
@@ -91,6 +92,7 @@ export default function TodayScreen({
   const [detail, setDetail] = useState(null);
   const [syncing, setSyncing] = useState(false);
   const [prBanner, setPrBanner] = useState(null);
+  const [confirmCancel, setConfirmCancel] = useState(false);
 
   // Aplica datos health a un log (y al detalle abierto si coincide)
   const applyHealth = (logId, health) => {
@@ -865,10 +867,7 @@ export default function TodayScreen({
         </Pressable>
         <Pressable
           style={{ marginTop: 10, alignItems: 'center', paddingVertical: 12 }}
-          onPress={() => {
-            setSession(null);
-            stopRest();
-          }}
+          onPress={() => setConfirmCancel(true)}
         >
           <Text style={{ color: C.negative, fontWeight: '700', fontSize: 14 }}>
             Cancelar entrenamiento
@@ -876,6 +875,21 @@ export default function TodayScreen({
         </Pressable>
         <View style={{ height: 20 }} />
       </ScrollView>
+
+      <ConfirmModal
+        visible={confirmCancel}
+        title='¿Cancelar entrenamiento?'
+        message={`Se descartarán ${done} serie(s) registradas y el tiempo transcurrido. No se puede deshacer.`}
+        confirmLabel='Descartar'
+        cancelLabel='Seguir'
+        destructive
+        onConfirm={() => {
+          setConfirmCancel(false);
+          setSession(null);
+          stopRest();
+        }}
+        onCancel={() => setConfirmCancel(false)}
+      />
       </View>
     );
   }

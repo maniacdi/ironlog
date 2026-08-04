@@ -6,6 +6,7 @@ import {
   StatusBar,
   ActivityIndicator,
   AppState,
+  BackHandler,
 } from 'react-native';
 import {
   SafeAreaProvider,
@@ -17,6 +18,7 @@ import {
   IBMPlexMono_700Bold,
 } from '@expo-google-fonts/ibm-plex-mono';
 import { Icon } from './src/components/Icon';
+import { ConfirmModal } from './src/components/ConfirmModal';
 import { C, S } from './src/theme';
 import { loadData, saveData } from './src/storage';
 import { migrate, seed } from './src/dataModel';
@@ -61,6 +63,7 @@ function AppInner() {
   const [session, setSession] = useState(null);
   const [rest, setRest] = useState(0);
   const [restLabel, setRestLabel] = useState('Descanso');
+  const [confirmExit, setConfirmExit] = useState(false);
   const loaded = useRef(false);
   const insets = useSafeAreaInsets();
   const [fontsLoaded, fontError] = useFonts({
@@ -136,6 +139,28 @@ function AppInner() {
     });
     return () => sub.remove();
   }, []);
+
+  // Botón atrás de Android. Con un entreno en curso NUNCA sale directamente:
+  // pide confirmación. Los Modal de las pantallas se cierran solos antes de
+  // llegar aquí (tienen su propio onRequestClose).
+  useEffect(() => {
+    const sub = BackHandler.addEventListener('hardwareBackPress', () => {
+      if (confirmExit) {
+        setConfirmExit(false);
+        return true;
+      }
+      if (session) {
+        setConfirmExit(true);
+        return true;
+      }
+      if (tab !== 'today') {
+        setTab('today');
+        return true;
+      }
+      return false; // sin sesión y en Hoy → comportamiento normal (salir)
+    });
+    return () => sub.remove();
+  }, [session, tab, confirmExit]);
 
   if (!data || !fontsReady)
     return (
@@ -307,6 +332,21 @@ function AppInner() {
           </Pressable>
         ))}
       </View>
+
+      <ConfirmModal
+        visible={confirmExit}
+        title='Entrenamiento en curso'
+        message='Si lo descartas pierdes las series registradas y el tiempo transcurrido. Para dejar la app abierta en segundo plano usa el botón de inicio.'
+        confirmLabel='Descartar'
+        cancelLabel='Seguir'
+        destructive
+        onConfirm={() => {
+          setConfirmExit(false);
+          setSession(null);
+          stopRest();
+        }}
+        onCancel={() => setConfirmExit(false)}
+      />
     </View>
   );
 }
