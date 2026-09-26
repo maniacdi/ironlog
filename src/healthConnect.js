@@ -16,12 +16,9 @@ const PERMISSIONS = [
 // Además acumula las últimas líneas para poder mostrarlas en pantalla.
 const LOG_BUFFER = [];
 function log(...args) {
-  const line = args
-    .map((a) => (typeof a === 'string' ? a : JSON.stringify(a)))
-    .join(' ');
+  const line = args.map((a) => (typeof a === 'string' ? a : JSON.stringify(a))).join(' ');
   LOG_BUFFER.push(line);
   if (LOG_BUFFER.length > 60) LOG_BUFFER.shift();
-  // eslint-disable-next-line no-console
   console.log('[HC]', line);
 }
 
@@ -63,7 +60,10 @@ export async function requestHealthPermissions() {
   if (!HC) return [];
   try {
     const granted = await HC.requestPermission(PERMISSIONS);
-    log('requestPermission concedidos =', (granted || []).map((g) => g.recordType));
+    log(
+      'requestPermission concedidos =',
+      (granted || []).map((g) => g.recordType),
+    );
     return granted;
   } catch (e) {
     log('requestPermission ERROR', String(e?.message || e));
@@ -75,7 +75,10 @@ export async function getGrantedHealthPermissions() {
   if (!HC) return [];
   try {
     const granted = await HC.getGrantedPermissions();
-    log('getGrantedPermissions =', (granted || []).map((g) => g.recordType));
+    log(
+      'getGrantedPermissions =',
+      (granted || []).map((g) => g.recordType),
+    );
     return granted || [];
   } catch (e) {
     log('getGrantedPermissions ERROR', String(e?.message || e));
@@ -86,8 +89,7 @@ export async function getGrantedHealthPermissions() {
 export async function hasHealthPermissions() {
   const granted = await getGrantedHealthPermissions();
   // Basta con FC O calorías; no exigimos los 4 tipos.
-  const has = (rt) =>
-    granted.some((g) => g.recordType === rt && g.accessType === 'read');
+  const has = (rt) => granted.some((g) => g.recordType === rt && g.accessType === 'read');
   const ok = has('HeartRate') || has('TotalCaloriesBurned') || has('ActiveCaloriesBurned');
   log('hasHealthPermissions =', ok);
   return ok;
@@ -135,8 +137,7 @@ async function aggregateHeartRate(timeRangeFilter) {
       avgHr: num(res?.BPM_AVG),
     };
     log('aggregate HR =', out);
-    if (out.minHr == null && out.maxHr == null && out.avgHr == null)
-      return null;
+    if (out.minHr == null && out.maxHr == null && out.avgHr == null) return null;
     return out;
   } catch (e) {
     log('aggregate HR ERROR', String(e?.message || e));
@@ -144,36 +145,62 @@ async function aggregateHeartRate(timeRangeFilter) {
   }
 }
 
-export async function readSessionHealthData(startMs, endMs) {
-  if (!HC) return null;
-  const timeRangeFilter = {
-    operator: 'between',
-    startTime: new Date(startMs).toISOString(),
-    endTime: new Date(endMs).toISOString(),
-  };
-  log('leyendo rango', timeRangeFilter.startTime, '→', timeRangeFilter.endTime);
+const range = (startMs, endMs) => ({
+  operator: 'between',
+  startTime: new Date(startMs).toISOString(),
+  endTime: new Date(endMs).toISOString(),
+});
 
-  // Si hay una sesión de ejercicio del reloj, acotamos la FC a SU ventana real
-  // (no todo el bloque con calentamiento/descansos) → media más parecida al reloj.
-  const exRecords = await readType('ExerciseSession', timeRangeFilter);
-  let hrFilter = timeRangeFilter;
-  if (exRecords.length) {
-    const starts = exRecords
-      .map((r) => (r.startTime ? new Date(r.startTime).getTime() : null))
-      .filter((v) => v);
-    const ends = exRecords
-      .map((r) => (r.endTime ? new Date(r.endTime).getTime() : null))
-      .filter((v) => v);
-    if (starts.length && ends.length) {
-      hrFilter = {
-        operator: 'between',
-        startTime: new Date(Math.min(...starts)).toISOString(),
-        endTime: new Date(Math.max(...ends)).toISOString(),
-      };
-      log('FC acotada a sesión de ejercicio', hrFilter.startTime, '→', hrFilter.endTime);
+// Elige, entre las sesiones de ejercicio del reloj, la que mejor encaja con
+// el entreno: la de duración más parecida (o la más larga si no se sabe).
+export function pickExerciseSession(records, durationMin) {
+  const spans = records
+    .map((r) => ({
+      start: r.startTime ? new Date(r.startTime).getTime() : null,
+      end: r.endTime ? new Date(r.endTime).getTime() : null,
+    }))
+    .filter((s) => s.start && s.end && s.end > s.start);
+  if (!spans.length) return null;
+  const mins = (s) => (s.end - s.start) / 60000;
+  const score = durationMin ? (s) => -Math.abs(mins(s) - durationMin) : (s) => mins(s);
+  return spans.reduce((best, s) => (score(s) > score(best) ? s : best), spans[0]);
+}
+
+// Lee FC y calorías de un entreno.
+// - exact: [startMs, endMs] son el inicio/fin reales del entreno en la app.
+// - si no (sesiones antiguas sin hora), [startMs, endMs] es el día completo y
+//   se busca la sesión de ejercicio del reloj que encaje con `durationMin`.
+//   Sin esa sesión no se devuelve nada: la FC y las kcal del día entero
+//   (incluido el gasto basal) no representan el entreno.
+export async function readSessionHealthData(startMs, endMs, { exact = true, durationMin } = {}) {
+  if (!HC) return null;
+  let win = { start: startMs, end: endMs };
+  log(
+    'leyendo rango',
+    new Date(startMs).toISOString(),
+    '→',
+    new Date(endMs).toISOString(),
+    exact ? '(exacto)' : '(día)',
+  );
+
+  if (!exact) {
+    const exRecords = await readType('ExerciseSession', range(startMs, endMs));
+    const picked = pickExerciseSession(exRecords, durationMin);
+    if (!picked) {
+      log('sin sesión de ejercicio del reloj ese día → no se puede acotar el entreno');
+      return null;
     }
+    win = picked;
+    log(
+      'acotado a sesión del reloj',
+      new Date(win.start).toISOString(),
+      '→',
+      new Date(win.end).toISOString(),
+    );
   }
 
+  const timeRangeFilter = range(win.start, win.end);
+  const hrFilter = timeRangeFilter;
   const [hrRecords, totalCalRecords, activeCalRecords] = await Promise.all([
     readType('HeartRate', hrFilter),
     readType('TotalCaloriesBurned', timeRangeFilter),
@@ -203,24 +230,18 @@ export async function readSessionHealthData(startMs, endMs) {
   const avgHr = agg?.avgHr ?? sAvg;
   const maxHr = Math.max(agg?.maxHr ?? 0, sMax ?? 0) || null;
   const minHr =
-    agg?.minHr != null && sMin != null
-      ? Math.min(agg.minHr, sMin)
-      : (agg?.minHr ?? sMin);
+    agg?.minHr != null && sMin != null ? Math.min(agg.minHr, sMin) : (agg?.minHr ?? sMin);
 
   // Serie temporal reducida a ~40 puntos para la gráfica de sesión
   const MAX_POINTS = 40;
   const step = Math.max(1, Math.ceil(hrSamples.length / MAX_POINTS));
-  const hrSeries = hrSamples
-    .filter((_, i) => i % step === 0)
-    .map((s) => s.bpm);
+  const hrSeries = hrSamples.filter((_, i) => i % step === 0).map((s) => s.bpm);
 
   // Kcal — TotalCaloriesBurned, si no hay probamos ActiveCaloriesBurned
   const sumKcal = (records) =>
     records.reduce((acc, r) => {
       const inCal = r.energy?.inCalories;
-      const kcal =
-        r.energy?.inKilocalories ??
-        (typeof inCal === 'number' ? inCal / 1000 : 0);
+      const kcal = r.energy?.inKilocalories ?? (typeof inCal === 'number' ? inCal / 1000 : 0);
       return acc + (kcal || 0);
     }, 0);
   const kcalTotal = sumKcal(totalCalRecords);
@@ -241,6 +262,7 @@ export async function readSessionHealthData(startMs, endMs) {
     kcal,
     samples: bpmValues.length,
     hrSeries: hrSeries.length > 1 ? hrSeries : null,
+    window: { start: win.start, end: win.end },
     source: 'Samsung Health / Health Connect',
   };
 }
@@ -290,13 +312,19 @@ export async function runHealthDiagnostic(startMs, endMs) {
   if (!initialized) return report;
 
   let granted = await getGrantedHealthPermissions();
-  add('Permisos concedidos', granted.length ? granted.map((g) => g.recordType).join(', ') : 'NINGUNO');
+  add(
+    'Permisos concedidos',
+    granted.length ? granted.map((g) => g.recordType).join(', ') : 'NINGUNO',
+  );
 
   if (!granted.length) {
     add('Acción', 'Pidiendo permisos…');
     await requestHealthPermissions();
     granted = await getGrantedHealthPermissions();
-    add('Permisos tras pedir', granted.length ? granted.map((g) => g.recordType).join(', ') : 'NINGUNO (rechazados)');
+    add(
+      'Permisos tras pedir',
+      granted.length ? granted.map((g) => g.recordType).join(', ') : 'NINGUNO (rechazados)',
+    );
     if (!granted.length) {
       add('Acción', 'Concede permisos en Health Connect > Permisos de apps > IronLog.');
       return report;

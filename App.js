@@ -1,38 +1,24 @@
-import React, { useState, useEffect, useRef } from 'react';
-import {
-  View,
-  Text,
-  Pressable,
-  StatusBar,
-  ActivityIndicator,
-  AppState,
-  BackHandler,
-} from 'react-native';
-import {
-  SafeAreaProvider,
-  useSafeAreaInsets,
-} from 'react-native-safe-area-context';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import { View, Text, Pressable, StatusBar, ActivityIndicator, BackHandler } from 'react-native';
+import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFonts, Anton_400Regular } from '@expo-google-fonts/anton';
-import {
-  IBMPlexMono_500Medium,
-  IBMPlexMono_700Bold,
-} from '@expo-google-fonts/ibm-plex-mono';
+import { IBMPlexMono_500Medium, IBMPlexMono_700Bold } from '@expo-google-fonts/ibm-plex-mono';
 import { Icon } from './src/components/Icon';
 import { ConfirmModal } from './src/components/ConfirmModal';
+import { RestBar } from './src/components/RestBar';
 import { C, S } from './src/theme';
-import { loadData, saveData } from './src/storage';
+import { loadData, saveData, loadActive, saveActive } from './src/storage';
 import { migrate, seed } from './src/dataModel';
-import { mmss } from './src/helpers';
-import {
-  scheduleRestDone,
-  cancelRest,
-  initNotifChannel,
-} from './src/notifications';
-import TodayScreen from './src/screens/TodayScreen';
+import { convertDataUnits, convertSessionUnits } from './src/domain/units';
+import { initNotifChannel } from './src/notifications';
+import { useRestTimer } from './src/hooks/useRestTimer';
+import { usePersist } from './src/hooks/usePersist';
+import TodayScreen from './src/screens/today/TodayScreen';
 import RoutinesScreen from './src/screens/RoutinesScreen';
 import ExercisesScreen from './src/screens/ExercisesScreen';
 import ProgressScreen from './src/screens/ProgressScreen';
 import DataScreen from './src/screens/DataScreen';
+import LoadErrorScreen from './src/screens/LoadErrorScreen';
 
 const TABS = [
   ['today', 'calendar', 'Hoy'],
@@ -58,13 +44,13 @@ export default function App() {
 }
 
 function AppInner() {
+  const [boot, setBoot] = useState({ status: 'loading' });
   const [data, setData] = useState(null);
-  const [tab, setTab] = useState('today');
   const [session, setSession] = useState(null);
-  const [rest, setRest] = useState(0);
-  const [restLabel, setRestLabel] = useState('Descanso');
+  const [tab, setTab] = useState('today');
   const [confirmExit, setConfirmExit] = useState(false);
-  const loaded = useRef(false);
+  const [saveError, setSaveError] = useState(null);
+  const timer = useRestTimer();
   const insets = useSafeAreaInsets();
   const [fontsLoaded, fontError] = useFonts({
     Anton_400Regular,
@@ -72,73 +58,45 @@ function AppInner() {
     IBMPlexMono_700Bold,
   });
   const fontsReady = fontsLoaded || !!fontError; // si fallan, seguimos con fuente del sistema
+  const { restore: restoreRest } = timer;
 
-  // Temporizador en background: guardamos timestamp de inicio + duración total
-  const restStartedAt = useRef(null);
-  const restDuration = useRef(0);
-  const restNotifId = useRef(null);
-  const appState = useRef(AppState.currentState);
-
-  useEffect(() => {
-    (async () => {
-      const d = await loadData();
-      setData(d ? migrate(d) : seed());
-      loaded.current = true;
-    })();
-    initNotifChannel();
-  }, []);
-
-  useEffect(() => {
-    if (loaded.current && data) saveData(data);
-  }, [data]);
-
-  // Intervalo del temporizador — usa timestamps para ser preciso
-  useEffect(() => {
-    if (rest <= 0) {
-      restStartedAt.current = null;
-      return;
+  const load = useCallback(async () => {
+    setBoot({ status: 'loading' });
+    const res = await loadData();
+    if (res.status === 'error') return setBoot({ status: 'error', error: res.error });
+    let d;
+    try {
+      d = res.status === 'empty' ? seed() : migrate(res.data);
+    } catch (error) {
+      return setBoot({ status: 'error', error });
     }
-    const t = setInterval(() => {
-      if (!restStartedAt.current) return;
-      const elapsed = Math.floor((Date.now() - restStartedAt.current) / 1000);
-      const remaining = restDuration.current - elapsed;
-      if (remaining <= 0) {
-        setRest(0);
-        restNotifId.current = null;
-        clearInterval(t);
-      } else {
-        setRest(remaining);
-      }
-    }, 500);
-    return () => clearInterval(t);
-  }, [rest > 0 ? restDuration.current : 0]);
+    // Entreno en curso que sobrevivió a un cierre de la app.
+    const active = await loadActive();
+    if (active?.session) setSession(active.session);
+    restoreRest(active?.rest || null);
+    setData(d);
+    setBoot({ status: 'ok' });
+  }, [restoreRest]);
 
-  // Al volver a primer plano, recalcular tiempo real transcurrido
   useEffect(() => {
-    const sub = AppState.addEventListener('change', (nextState) => {
-      if (
-        appState.current.match(/inactive|background/) &&
-        nextState === 'active'
-      ) {
-        if (restStartedAt.current) {
-          const elapsed = Math.floor(
-            (Date.now() - restStartedAt.current) / 1000,
-          );
-          const remaining = restDuration.current - elapsed;
-          if (remaining <= 0) {
-            setRest(0);
-            restStartedAt.current = null;
-          } else {
-            restDuration.current = remaining;
-            restStartedAt.current = Date.now();
-            setRest(remaining);
-          }
-        }
-      }
-      appState.current = nextState;
-    });
-    return () => sub.remove();
-  }, []);
+    load();
+    initNotifChannel();
+  }, [load]);
+
+  const ready = boot.status === 'ok' && !!data;
+
+  // Solo se guarda con una carga correcta: nunca tras un error de lectura.
+  usePersist(
+    data,
+    async (d) => {
+      await saveData(d);
+      setSaveError(null);
+    },
+    { enabled: ready, onError: (e) => setSaveError(String(e?.message || e)) },
+  );
+
+  const active = useMemo(() => ({ session, rest: timer.rest }), [session, timer.rest]);
+  usePersist(active, saveActive, { enabled: ready, delay: 250 });
 
   // Botón atrás de Android. Con un entreno en curso NUNCA sale directamente:
   // pide confirmación. Los Modal de las pantallas se cierran solos antes de
@@ -162,7 +120,15 @@ function AppInner() {
     return () => sub.remove();
   }, [session, tab, confirmExit]);
 
-  if (!data || !fontsReady)
+  if (boot.status === 'error')
+    return (
+      <>
+        <StatusBar barStyle='light-content' />
+        <LoadErrorScreen error={boot.error} onRetry={load} insets={insets} />
+      </>
+    );
+
+  if (!ready || !fontsReady)
     return (
       <View
         style={{
@@ -179,23 +145,15 @@ function AppInner() {
     );
 
   const unit = data.settings.unit;
-  const startRest = (secs, label) => {
-    const duration = secs || data.settings.restSeconds || 90;
-    restDuration.current = duration;
-    restStartedAt.current = Date.now();
-    setRest(duration);
-    setRestLabel(label || 'Descanso');
-    // Notificación local por si el usuario bloquea/sale de la app
-    cancelRest(restNotifId.current);
-    (async () => {
-      restNotifId.current = await scheduleRestDone(duration, label);
-    })();
+  const startRest = (secs, label) => timer.start(secs || data.settings.restSeconds || 90, label);
+  const discardSession = () => {
+    setSession(null);
+    timer.stop();
   };
-  const stopRest = () => {
-    setRest(0);
-    restStartedAt.current = null;
-    cancelRest(restNotifId.current);
-    restNotifId.current = null;
+  const changeUnit = (to) => {
+    const from = data.settings.unit;
+    setData((d) => convertDataUnits(d, to));
+    setSession((s) => convertSessionUnits(s, from, to));
   };
 
   return (
@@ -216,13 +174,19 @@ function AppInner() {
         <View style={{ flex: 1 }}>
           <Text style={S.title}>{TITLES[tab][0]}</Text>
           <Text style={[S.sub, { marginTop: 3 }]}>
-            {session && tab === 'today'
-              ? 'Entrenamiento en curso'
-              : TITLES[tab][1]}
+            {session && tab === 'today' ? 'Entrenamiento en curso' : TITLES[tab][1]}
           </Text>
         </View>
         <Icon name='dumbbell' size={26} color={C.accent} />
       </View>
+
+      {!!saveError && (
+        <View style={{ backgroundColor: C.negative, paddingHorizontal: 16, paddingVertical: 8 }}>
+          <Text style={{ color: '#fff', fontSize: 12, fontWeight: '700' }}>
+            No se pudieron guardar los últimos cambios. Exporta una copia desde Datos.
+          </Text>
+        </View>
+      )}
 
       <View style={{ flex: 1 }}>
         {tab === 'today' && (
@@ -233,65 +197,29 @@ function AppInner() {
             setSession={setSession}
             unit={unit}
             startRest={startRest}
-            stopRest={stopRest}
+            stopRest={timer.stop}
           />
         )}
-        {tab === 'routines' && (
-          <RoutinesScreen data={data} setData={setData} unit={unit} />
-        )}
-        {tab === 'exercises' && (
-          <ExercisesScreen data={data} setData={setData} />
-        )}
+        {tab === 'routines' && <RoutinesScreen data={data} setData={setData} unit={unit} />}
+        {tab === 'exercises' && <ExercisesScreen data={data} setData={setData} session={session} />}
         {tab === 'progress' && <ProgressScreen data={data} unit={unit} />}
-        {tab === 'data' && <DataScreen data={data} setData={setData} />}
+        {tab === 'data' && (
+          <DataScreen
+            data={data}
+            setData={setData}
+            onChangeUnit={changeUnit}
+            hasSession={!!session}
+          />
+        )}
       </View>
 
-      {rest > 0 && (
-        <View
-          style={{
-            flexDirection: 'row',
-            alignItems: 'center',
-            gap: 12,
-            paddingHorizontal: 16,
-            paddingVertical: 10,
-            backgroundColor: C.surface,
-            borderTopWidth: 1,
-            borderColor: C.accent,
-          }}
-        >
-          <Icon name='clock' size={18} color={C.accent} />
-          <Text style={S.sub}>{restLabel}</Text>
-          <Text
-            style={{
-              color: C.accent,
-              fontSize: 26,
-              fontWeight: '800',
-              minWidth: 64,
-            }}
-          >
-            {mmss(rest)}
-          </Text>
-          <View style={{ flex: 1 }} />
-          <Pressable
-            style={S.iconBtn}
-            onPress={() => {
-              restDuration.current += 15;
-              setRest((r) => {
-                const next = r + 15;
-                cancelRest(restNotifId.current);
-                (async () => {
-                  restNotifId.current = await scheduleRestDone(next, restLabel);
-                })();
-                return next;
-              });
-            }}
-          >
-            <Icon name='plus' size={15} color={C.muted} />
-          </Pressable>
-          <Pressable style={S.iconBtn} onPress={stopRest}>
-            <Icon name='skip-forward' size={15} color={C.muted} />
-          </Pressable>
-        </View>
+      {timer.remaining > 0 && (
+        <RestBar
+          remaining={timer.remaining}
+          label={timer.rest?.label || 'Descanso'}
+          onAdd={() => timer.add(15)}
+          onSkip={timer.stop}
+        />
       )}
 
       <View
@@ -307,25 +235,11 @@ function AppInner() {
           <Pressable
             key={id}
             onPress={() => setTab(id)}
-            style={{
-              flex: 1,
-              alignItems: 'center',
-              paddingTop: 10,
-              paddingBottom: 12,
-              gap: 4,
-            }}
+            style={{ flex: 1, alignItems: 'center', paddingTop: 10, paddingBottom: 12, gap: 4 }}
           >
-            <Icon
-              name={icon}
-              size={19}
-              color={tab === id ? C.accent : C.muted}
-            />
+            <Icon name={icon} size={19} color={tab === id ? C.accent : C.muted} />
             <Text
-              style={{
-                fontSize: 10,
-                fontWeight: '600',
-                color: tab === id ? C.accent : C.muted,
-              }}
+              style={{ fontSize: 10, fontWeight: '600', color: tab === id ? C.accent : C.muted }}
             >
               {label}
             </Text>
@@ -336,14 +250,13 @@ function AppInner() {
       <ConfirmModal
         visible={confirmExit}
         title='Entrenamiento en curso'
-        message='Si lo descartas pierdes las series registradas y el tiempo transcurrido. Para dejar la app abierta en segundo plano usa el botón de inicio.'
+        message='Si lo descartas pierdes las series registradas y el tiempo transcurrido. Para dejar la app abierta en segundo plano usa el botón de inicio (el entreno se conserva aunque Android cierre la app).'
         confirmLabel='Descartar'
         cancelLabel='Seguir'
         destructive
         onConfirm={() => {
           setConfirmExit(false);
-          setSession(null);
-          stopRest();
+          discardSession();
         }}
         onCancel={() => setConfirmExit(false)}
       />

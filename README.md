@@ -84,20 +84,48 @@ eas build -p ios --profile preview
 
 ```
 ironlog/
-  App.js                 # raíz: estado, navegación por pestañas, cronómetro
+  App.js                 # raíz: carga/guardado, pestañas, entreno en curso, descanso
   index.js               # punto de entrada
   app.json               # configuración de Expo
   mi-rutina.json         # tu rutina, lista para importar
+  modules/exact-alarm/   # módulo nativo local: permiso de alarmas exactas (Android 12+)
   src/
     theme.js             # colores y estilos
-    helpers.js           # utilidades, fechas, CSV
-    storage.js           # AsyncStorage
-    dataModel.js         # seed + migración
-    components/          # Icon, Stepper, Charts, ExercisePicker
-    screens/             # Today, Routines, Exercises, Progress, Data
+    helpers.js           # utilidades, fechas, CSV, exportación para IA
+    storage.js           # AsyncStorage por bloques (historial por año) + entreno en curso
+    dataModel.js         # seed + migración de esquema
+    domain/              # lógica pura y testeada: tipos de ejercicio, series/volumen,
+                         #   sesión, estadísticas, unidades, validación, import/export
+    hooks/               # temporizador de descanso, persistencia, permisos
+    components/          # Icon, Stepper, Charts, ExercisePicker, BottomSheet…
+    screens/             # today/ (sesión, detalle…), Routines, Exercises, Progress, Data
+    __tests__/           # tests de Jest
+```
+
+## Tipos de ejercicio
+
+| Tipo | Serie registra | Progreso |
+|------|----------------|----------|
+| Fuerza | reps + peso | peso máx. y 1RM estimado |
+| Peso corporal | reps + lastre | reps máx. y lastre |
+| Tiempo | segundos | segundos máx. |
+| Cardio | minutos + km/h + inclinación | minutos y distancia estimada |
+
+En el CSV/JSON de rutinas, la columna `tipo` acepta `fuerza`, `peso corporal`, `tiempo` o `cardio` (si falta se deduce del nombre/músculo). Para tiempo y cardio, `reps` es el objetivo en segundos o minutos.
+
+Durante el entreno puedes **cambiar** un ejercicio por otro (p. ej. barra ocupada → mancuernas): el sustituto usa su propio historial. El interruptor **peso total / por mancuerna** hace que el volumen cuente ×2.
+
+## Desarrollo
+
+```bash
+npm test        # tests (Jest)
+npm run lint    # ESLint
 ```
 
 ## Notas
+- El entreno en curso se guarda continuamente: si Android cierra la app durante un descanso, al volver sigue donde estaba.
+- Si los datos guardados no se pueden leer, la app **no** sobrescribe nada: muestra una pantalla para reintentar o exportar una copia de rescate (restaurable desde Datos).
+- El aviso de fin de descanso necesita el permiso «Alarmas y recordatorios» en Android 12+ (Datos → Notificaciones de descanso). Requiere build nativo (`npm run build:prod`), no llega por OTA.
 - Si cambias de versión de Expo, vuelve a ejecutar `npx expo install <paquetes>` para que las versiones nativas cuadren.
 - Las gráficas usan `react-native-svg` (sin dependencias pesadas).
 - Para fuentes tipo "Oswald" puedes añadir `expo-font` más adelante; ahora se usa la tipografía del sistema.

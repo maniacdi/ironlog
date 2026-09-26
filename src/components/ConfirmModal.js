@@ -41,24 +41,13 @@ export function ConfirmModal({
           onPress={() => {}}
         >
           <Text style={S.disp}>{title}</Text>
-          {!!message && (
-            <Text style={[S.sub, { marginTop: 10, lineHeight: 19 }]}>
-              {message}
-            </Text>
-          )}
+          {!!message && <Text style={[S.sub, { marginTop: 10, lineHeight: 19 }]}>{message}</Text>}
           <View style={{ flexDirection: 'row', gap: 10, marginTop: 22 }}>
-            <Pressable
-              style={[S.btn, S.btnGhost, { flex: 1 }]}
-              onPress={onCancel}
-            >
+            <Pressable style={[S.btn, S.btnGhost, { flex: 1 }]} onPress={onCancel}>
               <Text style={S.btnTextGhost}>{cancelLabel}</Text>
             </Pressable>
             <Pressable
-              style={[
-                S.btn,
-                { flex: 1 },
-                destructive && { backgroundColor: C.negative },
-              ]}
+              style={[S.btn, { flex: 1 }, destructive && { backgroundColor: C.negative }]}
               onPress={onConfirm}
             >
               <Text style={S.btnText}>{confirmLabel}</Text>
