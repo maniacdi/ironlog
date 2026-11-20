@@ -1,9 +1,12 @@
 import React from 'react';
 import { Modal, View, Pressable } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { C } from '../theme';
 
 // Hoja inferior modal con tirador; se cierra tocando fuera o con "atrás".
+// Respeta la zona segura inferior (barra de gestos) para no quedar pegada.
 export function BottomSheet({ visible, onClose, maxHeight = '80%', padding = 16, children }) {
+  const insets = useSafeAreaInsets();
   return (
     <Modal visible={visible} transparent animationType='slide' onRequestClose={onClose}>
       <Pressable style={{ flex: 1, backgroundColor: 'rgba(8,9,11,0.6)' }} onPress={onClose} />
@@ -20,6 +23,7 @@ export function BottomSheet({ visible, onClose, maxHeight = '80%', padding = 16,
           borderTopWidth: 1,
           borderColor: C.line,
           padding,
+          paddingBottom: padding + insets.bottom,
         }}
       >
         <View

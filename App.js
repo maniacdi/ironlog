@@ -96,7 +96,11 @@ function AppInner() {
   );
 
   const active = useMemo(() => ({ session, rest: timer.rest }), [session, timer.rest]);
-  usePersist(active, saveActive, { enabled: ready, delay: 250 });
+  usePersist(active, saveActive, {
+    enabled: ready,
+    delay: 250,
+    onError: (e) => setSaveError(String(e?.message || e)),
+  });
 
   // Botón atrás de Android. Con un entreno en curso NUNCA sale directamente:
   // pide confirmación. Los Modal de las pantallas se cierran solos antes de

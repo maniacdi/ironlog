@@ -6,7 +6,7 @@ export const C = {
   surface2: '#1B1E23',
   line: '#24282F',
   text: '#F3F4F6',
-  muted: '#767C86',
+  muted: '#8A909A',
   accent: '#FF5A1F',
   positive: '#34D399',
   blue: '#5B9BD5',

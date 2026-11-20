@@ -6,5 +6,5 @@ web-build/
 .DS_Store
 *.orig.*
 .env
-ios/
-android/
+/ios/
+/android/
